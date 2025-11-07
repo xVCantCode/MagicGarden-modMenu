@@ -160,7 +160,38 @@ export async function renderMiscMenu(container: HTMLElement) {
   content.style.display = "grid";
   content.style.gap = "8px";
   content.style.justifyItems = "center";
-  content.append(secPlayer, secSeed);
+  
+  // ===== Section: Selling controls =====
+  const secSelling = (() => {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "12px";
+    row.style.flexWrap = "wrap";
+
+    const blockSwitch = ui.switch(MiscService.readBlockSellCrops(false)) as HTMLInputElement;
+    const label = ui.label("Block crop sale (Sell All)");
+    label.style.fontSize = "13px";
+    label.style.margin = "0";
+    const pair = document.createElement("div");
+    pair.style.display = "inline-flex";
+    pair.style.alignItems = "center";
+    pair.style.gap = "6px";
+    pair.append(label, blockSwitch);
+    row.append(pair);
+
+    blockSwitch.onchange = () => {
+      const on = !!blockSwitch.checked;
+      MiscService.writeBlockSellCrops(on);
+    };
+
+    const card = ui.card("💸 Selling controls", { tone: "muted", align: "center" });
+    card.root.style.maxWidth = "440px";
+    card.body.append(row);
+    return card.root;
+  })();
+
+  content.append(secPlayer, secSeed, secSelling);
 
   view.appendChild(content);
 

@@ -38,6 +38,90 @@ export const setGhostDelayMs = (n: number) => {
 };
 
 /* ========================================================================== */
+/*                          SELL BLOCKING (CROPS)                             */
+/* ========================================================================== */
+
+export const LS_BLOCK_SELL_CROPS = "qws:sell:blockCrops";
+
+export const readBlockSellCrops = (def = false): boolean => {
+  try {
+    return localStorage.getItem(LS_BLOCK_SELL_CROPS) === "1";
+  } catch {
+    return def;
+  }
+};
+
+export const writeBlockSellCrops = (on: boolean): void => {
+  try {
+    localStorage.setItem(LS_BLOCK_SELL_CROPS, on ? "1" : "0");
+  } catch {}
+};
+
+/* ========================================================================== */
+/*                         ALERTS: PET-FOOD TOGGLE                           */
+/* ========================================================================== */
+
+export const LS_ALERTS_PET_FOOD = "qws:alerts:petFood";
+
+export const readPetFoodToggle = (def = false): boolean => {
+  try {
+    return localStorage.getItem(LS_ALERTS_PET_FOOD) === "1";
+  } catch {
+    return def;
+  }
+};
+
+export const writePetFoodToggle = (on: boolean): void => {
+  try {
+    localStorage.setItem(LS_ALERTS_PET_FOOD, on ? "1" : "0");
+  } catch {}
+};
+
+/* ========================================================================== */
+/*                 ALERTS: PET-FOOD PER-SPECIES PREFERENCES                   */
+/* ========================================================================== */
+
+export const LS_ALERTS_PET_FOOD_SPECIES = "qws:alerts:petFood:species";
+
+const normalizeSpeciesKey = (value: string): string =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[\'’`]/g, "")
+    .replace(/\s+/g, "")
+    .replace(/-/g, "")
+    .replace(/(seed|plant|baby|fruit|crop)$/i, "");
+
+export const readPetFoodSpeciesSet = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(LS_ALERTS_PET_FOOD_SPECIES);
+    if (!raw) return new Set<string>();
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) return new Set(arr.map((x) => normalizeSpeciesKey(String(x))));
+    return new Set<string>();
+  } catch {
+    return new Set<string>();
+  }
+};
+
+export const writePetFoodSpeciesSet = (values: Iterable<string>): void => {
+  try {
+    const arr = Array.from(values).map((x) => normalizeSpeciesKey(String(x)));
+    localStorage.setItem(LS_ALERTS_PET_FOOD_SPECIES, JSON.stringify(arr));
+  } catch {}
+};
+
+export const readPetFoodForSpecies = (species: string): boolean => {
+  const set = readPetFoodSpeciesSet();
+  return set.has(normalizeSpeciesKey(species));
+};
+
+export const writePetFoodForSpecies = (species: string, on: boolean): void => {
+  const set = readPetFoodSpeciesSet();
+  const key = normalizeSpeciesKey(species);
+  if (on) set.add(key); else set.delete(key);
+  writePetFoodSpeciesSet(set);
+};
+/* ========================================================================== */
 /*                               GHOST CONTROLLER                             */
 /* ========================================================================== */
 
@@ -860,6 +944,18 @@ export const MiscService = {
   getGhostDelayMs,
   setGhostDelayMs,
   createGhostController,
+
+  // selling controls
+  readBlockSellCrops,
+  writeBlockSellCrops,
+
+  // alerts controls
+  readPetFoodToggle,
+  writePetFoodToggle,
+  readPetFoodSpeciesSet,
+  writePetFoodSpeciesSet,
+  readPetFoodForSpecies,
+  writePetFoodForSpecies,
 
   // seeds
   getMySeedInventory,

@@ -4,8 +4,11 @@ import { pageWindow, readSharedGlobal, shareGlobal } from "../utils/page-context
 import { parseWSData } from "../core/parse";
 import { Atoms } from "../store/atoms";
 import { lockerService } from "../services/locker";
+import { MiscService } from "../services/misc";
 import { plantCatalog } from "../data/hardcoded-data.clean";
 import { StatsService } from "../services/stats";
+import { toastSimple } from "../ui/toast";
+import { PlayerService } from "../services/player";
 import type { GardenState, PlantSlotTiming } from "../store/atoms";
 
 export function installPageWebSocketHook() {
@@ -224,6 +227,8 @@ function installHarvestCropInterceptor() {
   if (readSharedGlobal<boolean>("__tmHarvestHookInstalled")) return;
 
   let latestGardenState: GardenState | null = null;
+  let latestCropItemsToSell: any[] | null = null;
+  let autoFavInstalled = false;
 
   void (async () => {
     try {
@@ -232,6 +237,14 @@ function installHarvestCropInterceptor() {
     try {
       await Atoms.data.garden.onChange((next) => {
         latestGardenState = (next as GardenState | null) ?? null;
+      });
+    } catch {}
+    try {
+      latestCropItemsToSell = await Atoms.inventory.myCropItemsToSell.get();
+    } catch {}
+    try {
+      await Atoms.inventory.myCropItemsToSell.onChange((next) => {
+        latestCropItemsToSell = Array.isArray(next) ? next.slice() : null;
       });
     } catch {}
   })();
@@ -367,6 +380,95 @@ function installHarvestCropInterceptor() {
   });
 
   registerMessageInterceptor("SellAllCrops", (message) => {
+    // Re-entry guard to allow the next SellAllCrops to pass through when we orchestrate the flow
+    const ALLOW_FLAG_KEY = "__tmAllowNextSellAllCrops";
+    const allowNext = !!readSharedGlobal<boolean>(ALLOW_FLAG_KEY);
+    if (allowNext) {
+      shareGlobal(ALLOW_FLAG_KEY, false);
+      // Allow this one to go through (it was triggered by our orchestrated flow)
+    } else {
+      // Global block: veto entirely
+      try {
+        if (MiscService.readBlockSellCrops?.(false)) {
+          console.log("[SellAllCrops] Blocked by setting");
+          void toastSimple("Selling crops blocked", "Disable block in Misc to sell.", "warn");
+          return { kind: "drop" };
+        }
+      } catch {}
+
+      // Orchestrate: favorite protected species, send SellAllCrops, then unfavorite
+      (async () => {
+        try {
+          const inv = await PlayerService.getCropInventoryState?.();
+          const items = Array.isArray(inv) ? inv : [];
+          const favSet = await PlayerService.getFavoriteIdSet?.().catch(() => new Set<string>()) as Set<string>;
+          const protectedSet = (() => { try { return MiscService.readPetFoodSpeciesSet?.() ?? new Set<string>(); } catch { return new Set<string>(); }})();
+          const protectedIds: string[] = [];
+          for (const it of items) {
+            const sp = String((it as any)?.species ?? "");
+            const norm = sp
+              .toLowerCase()
+              .replace(/[\'’`]/g, "")
+              .replace(/\s+/g, "")
+              .replace(/-/g, "")
+              .replace(/(seed|plant|baby|fruit|crop)$/i, "");
+            if (protectedSet.has(norm) && typeof it?.id === "string" && it.id) {
+              protectedIds.push(it.id);
+            }
+          }
+
+          const toFavorite = protectedIds.filter((id) => !favSet.has(id));
+          if (toFavorite.length > 0) {
+            await PlayerService.ensureFavorites(toFavorite, true);
+          }
+
+          // Send our own message and allow it to pass through
+          shareGlobal(ALLOW_FLAG_KEY, true);
+          try {
+            await PlayerService.sellAllCrops();
+          } catch {}
+
+          // Wait for one inventory diff as a signal of completion
+          try {
+            await new Promise<void>(async (resolve) => {
+              let offUnsub: (() => void) | undefined;
+              try {
+                const reg = PlayerService.onCropInventoryDiff?.((inv, diff) => {
+                  try { offUnsub?.(); } catch {}
+                  resolve();
+                });
+                if (typeof reg === "function") offUnsub = reg as any;
+                else if (reg && typeof (reg as any).then === "function") offUnsub = await (reg as Promise<() => void>);
+              } catch {
+                resolve();
+              }
+            });
+          } catch {}
+
+          // Unfavorite those we just favorited
+          try {
+            if (toFavorite.length > 0) {
+              await PlayerService.ensureFavorites(toFavorite, false);
+            }
+          } catch {}
+        } catch (error) {
+          console.error("[SellAllCrops] Orchestration error", error);
+        }
+      })();
+
+      return { kind: "drop" };
+    }
+    // Global block: veto entirely
+    try {
+      if (MiscService.readBlockSellCrops?.(false)) {
+        console.log("[SellAllCrops] Blocked by setting");
+        void toastSimple("Selling crops blocked", "Disable block in Misc to sell.", "warn");
+        return { kind: "drop" };
+      }
+    } catch {}
+
+    // (handled above in orchestrated branch)
+
     void (async () => {
       try {
         const items = await Atoms.inventory.myCropItemsToSell.get();
@@ -405,6 +507,46 @@ function installHarvestCropInterceptor() {
       }
     })();
   });
+
+  // Persistency: auto-favorite protected species (Daffodil) when crops enter inventory
+  if (!autoFavInstalled) {
+    try {
+      const off = PlayerService.onCropInventoryDiff?.(async (inv, diff) => {
+        try {
+          const enabled = MiscService.readPetFoodToggle?.(false);
+          if (!enabled) return;
+          const addedIds = Array.isArray(diff?.added) ? diff.added : [];
+          if (!addedIds.length) return;
+          const items = Array.isArray(inv) ? inv : [];
+          const byId = new Map<string, any>();
+          for (const it of items) {
+            const id = String((it as any)?.id ?? "");
+            if (id) byId.set(id, it);
+          }
+          const toFav: string[] = [];
+          const protectedSet = (() => { try { return MiscService.readPetFoodSpeciesSet?.() ?? new Set<string>(); } catch { return new Set<string>(); }})();
+          for (const id of addedIds) {
+            const it = byId.get(String(id));
+            if (!it) continue;
+            const sp = String((it as any)?.species ?? "");
+            const norm = sp
+              .toLowerCase()
+              .replace(/[\'’`]/g, "")
+              .replace(/\s+/g, "")
+              .replace(/-/g, "")
+              .replace(/(seed|plant|baby|fruit|crop)$/i, "");
+            if (protectedSet.has(norm)) {
+              toFav.push(String(id));
+            }
+          }
+          if (toFav.length) {
+            await PlayerService.ensureFavorites?.(toFav, true);
+          }
+        } catch {}
+      });
+      autoFavInstalled = true;
+    } catch {}
+  }
 
   shareGlobal("__tmHarvestHookInstalled", true);
 }

@@ -20,6 +20,7 @@ import { createShopSprite } from "../../utils/shopSprites";
 import { createWeatherSprite } from "../../utils/weatherSprites";
 
 import { audio, type AudioContextKey, type PlaybackMode } from "../../utils/audio";
+import { MiscService } from "../../services/misc";
 
 type RuleEditorRow = {
   id: string;
@@ -1565,6 +1566,8 @@ style.textContent = `
 
   header.append(lblType, selType, lblRarity, selRarity, followedBadge);
 
+  // Pet-Food per-crop toggles are shown in the grid below
+
   const card = document.createElement("div");
   card.style.border = "1px solid #4445";
   card.style.borderRadius = "10px";
@@ -1577,7 +1580,7 @@ style.textContent = `
   wrap.appendChild(card);
 
   const headerGrid = document.createElement("div");
-  const COLS = "minmax(200px, 1fr) 9rem 7rem 8rem";
+  const COLS = "minmax(200px, 1fr) 9rem 7rem 7rem 8rem";
   headerGrid.style.display = "grid";
   headerGrid.style.gridTemplateColumns = COLS;
   headerGrid.style.justifyContent = "start";
@@ -1591,9 +1594,16 @@ style.textContent = `
     mkHeadCell("Item", "left"),
     mkHeadCell("Rarity"),
     mkHeadCell("Notify"),
+    mkHeadCell("Pet-Food"),
     mkHeadCell("Custom rules"),
   );
   card.appendChild(headerGrid);
+
+  // helper to extract species key from row id when name is missing
+  const afterColon = (s: string) => {
+    const i = s.indexOf(":");
+    return i >= 0 ? s.slice(i + 1) : s;
+  };
 
   const bodyGrid = document.createElement("div");
   bodyGrid.style.display = "grid";
@@ -1811,10 +1821,25 @@ style.textContent = `
       }, gearBtn);
     });
 
+    // Per-item Pet-Food toggle
+    const petFoodSwitch = createSwitch((on) => {
+      try {
+        const speciesKey = String(row.name || afterColon(row.id));
+        MiscService.writePetFoodForSpecies?.(speciesKey, !!on);
+      } catch {}
+    });
+    // initial state
+    try {
+      const speciesKey = String(row.name || afterColon(row.id));
+      setSwitchVisual(petFoodSwitch, !!MiscService.readPetFoodForSpecies?.(speciesKey));
+    } catch {}
+    (petFoodSwitch as HTMLLabelElement).style.padding = "0";
+    const petFoodCell = wrapCell(petFoodSwitch);
+
     const ruleCell = wrapCell(gearBtn);
     ruleCell.dataset.role = "rule-cell";
 
-    bodyGrid.append(itemCell, rarityCell, popupCell, ruleCell);
+    bodyGrid.append(itemCell, rarityCell, popupCell, petFoodCell, ruleCell);
     applyRuleState(itemCell, ruleCell, NotifierService.getRule(row.id));
   };
 

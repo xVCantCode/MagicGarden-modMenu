@@ -5,6 +5,9 @@ import { PlayerService } from "./player";
 import { eventMatchesKeybind } from "./keybinds";
 import { shouldIgnoreKeydown } from "../utils/keyboard";
 import { runSellAllPetsFlow } from "../utils/sellAllPets";
+import { MiscService } from "./misc";
+import { toastSimple } from "../ui/toast";
+import { Atoms } from "../store/atoms";
 
 let sellKeybindsInstalled = false;
 
@@ -20,7 +23,16 @@ export function installSellKeybindsOnce(): void {
       if (eventMatchesKeybind("sell.sell-all", event)) {
         event.preventDefault();
         event.stopPropagation();
-        void PlayerService.sellAllCrops();
+        void (async () => {
+          try {
+            if (MiscService.readBlockSellCrops?.(false)) {
+              void toastSimple("Selling crops blocked", "Disable block in Misc to sell.", "warn");
+              return;
+            }
+          } catch {}
+
+          void PlayerService.sellAllCrops();
+        })();
         return;
       }
 
