@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Arie's Mod
+// @name         Belial's Mod
 // @namespace    Quinoa
 // @version      2.5.0
 // @match        https://1227719606223765687.discordsays.com/*
@@ -11172,7 +11172,7 @@
         {
           id: "gui.toggle",
           label: "\u{1F441}\uFE0F Toggle menu visibility",
-          hint: "Opens or closes the Arie's Mod overlay.",
+          hint: "Opens or closes the Belial's Mod overlay.",
           defaultHotkey: { alt: true, code: "KeyX" }
         },
         {
@@ -23276,7 +23276,7 @@ try{importScripts("${abs}")}catch(e){}
     box.className = "qws2";
     box.innerHTML = `
     <div class="row drag">
-      <div class="title">\u{1F383} Arie's Mod</div>
+      <div class="title">\u{1F383} Belials Mod</div>
       <div class="sp"></div>
       <span id="qws2-status-mini" class="pill warn mini">\u2026</span>
       <button id="qws2-min" class="btn" title="Minimize/Expand">\u2013</button>
@@ -35794,7 +35794,7 @@ next: ${next}`;
   }
 
   // src/utils/publicRooms.ts
-  var ROOMS_JSON_URL = "https://raw.githubusercontent.com/Ariedam64/MagicGarden-modMenu/refs/heads/main/rooms.json";
+  var ROOMS_JSON_URL = "https://raw.githubusercontent.com/xVCantCode/MagicGarden-modMenu/refs/heads/main/rooms.json";
   function resolveGmXhr() {
     if (typeof GM_xmlhttpRequest === "function") {
       return GM_xmlhttpRequest;
