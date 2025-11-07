@@ -19655,21 +19655,20 @@ try{importScripts("${abs}")}catch(e){}
   async function fetchScriptSource() {
     const commitSha = await fetchLatestCommitSha();
     const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
-    return await fetchText(scriptUrl);
+    const text = await fetchText(scriptUrl);
+    return { text, url: scriptUrl };
   }
   async function fetchRemoteVersion() {
     try {
-      const scriptSource = await fetchScriptSource();
+      const { text: scriptSource, url: scriptUrl } = await fetchScriptSource();
       const meta = extractUserscriptMetadata(scriptSource);
       if (!meta) {
         throw new Error("Metadata block not found in remote script");
       }
       const version = meta.get("version")?.[0];
-      const download = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
-      return {
-        version,
-        download
-      };
+      const metaDownload = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
+      const download = scriptUrl || metaDownload || void 0;
+      return { version, download };
     } catch (error) {
       console.error("Unable to retrieve remote version:", error);
       return null;

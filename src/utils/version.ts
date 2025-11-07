@@ -88,19 +88,20 @@ async function fetchLatestCommitSha(): Promise<string | null> {
   return null;
 }
 
-async function fetchScriptSource(): Promise<string> {
+async function fetchScriptSource(): Promise<{ text: string; url: string }> {
   const commitSha = await fetchLatestCommitSha();
 
   const scriptUrl = commitSha
     ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}`
     : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
 
-  return await fetchText(scriptUrl);
+  const text = await fetchText(scriptUrl);
+  return { text, url: scriptUrl };
 }
 
 export async function fetchRemoteVersion(): Promise<RemoteVersionResponse | null> {
   try {
-    const scriptSource = await fetchScriptSource();
+    const { text: scriptSource, url: scriptUrl } = await fetchScriptSource();
     const meta = extractUserscriptMetadata(scriptSource);
 
     if (!meta) {
@@ -108,12 +109,11 @@ export async function fetchRemoteVersion(): Promise<RemoteVersionResponse | null
     }
 
     const version = meta.get("version")?.[0];
-    const download = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
+    // Prefer our resolved raw URL from the fork; fall back to metadata if missing
+    const metaDownload = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
+    const download = scriptUrl || metaDownload || undefined;
 
-    return {
-      version,
-      download,
-    };
+    return { version, download };
   } catch (error) {
     console.error("Unable to retrieve remote version:", error);
     return null;
