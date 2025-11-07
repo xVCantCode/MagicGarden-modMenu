@@ -91,7 +91,7 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
       {
         id: "gui.toggle",
         label: "👁️ Toggle menu visibility",
-        hint: "Opens or closes the Arie's Mod overlay.",
+        hint: "Opens or closes the Belial's Mod overlay.",
         defaultHotkey: { alt: true, code: "KeyX" },
       },
       {

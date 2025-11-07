@@ -2,7 +2,7 @@ import { isDiscordSurface } from "./api";
 import { pageWindow } from "./page-context";
 
 const ROOMS_JSON_URL =
-  "https://raw.githubusercontent.com/Ariedam64/MagicGarden-modMenu/refs/heads/main/rooms.json";
+  "https://raw.githubusercontent.com/xVCantCode/MagicGarden-modMenu/refs/heads/main/rooms.json";
 
 interface FetchOptions extends RequestInit {
   cache?: RequestCache;
