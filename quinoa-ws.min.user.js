@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arie's Mod
+// @name         Belial's Mod
 // @namespace    Quinoa
-// @version      2.5.0
+// @version      2.6.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -14,8 +14,8 @@
 // @grant        GM_registerMenuCommand
 // @connect      raw.githubusercontent.com
 // @connect      api.github.com
-// @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
-// @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
+// @downloadURL  https://github.com/xVCantCode/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
+// @updateURL    https://github.com/xVCantCode/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
 (() => {
   var __create = Object.create;
@@ -5726,880 +5726,6 @@
   };
   var lockerService = new LockerService();
 
-  // src/services/stats.ts
-  var LS_STATS_KEY = "qws:stats:v1";
-  var GARDEN_INT_KEYS = {
-    totalPlanted: true,
-    totalHarvested: true,
-    totalDestroyed: true,
-    watercanUsed: true,
-    waterTimeSavedMs: true
-  };
-  var SHOP_INT_KEYS = {
-    seedsBought: true,
-    decorBought: true,
-    eggsBought: true,
-    toolsBought: true,
-    cropsSoldCount: true,
-    cropsSoldValue: false,
-    petsSoldCount: true,
-    petsSoldValue: false
-  };
-  var ABILITY_INT_KEYS = {
-    triggers: true,
-    totalValue: false
-  };
-  var WEATHER_INT_KEYS = {
-    triggers: true
-  };
-  var memoryStore = null;
-  var listeners = /* @__PURE__ */ new Set();
-  var isRecord = (value) => typeof value === "object" && value !== null;
-  var toNumber = (value, fallback = 0) => {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return fallback;
-    return num;
-  };
-  var toPositiveNumber = (value, fallback = 0) => {
-    const num = toNumber(value, fallback);
-    return Math.max(0, num);
-  };
-  var toPositiveInt = (value, fallback = 0) => {
-    const num = toPositiveNumber(value, fallback);
-    return Math.floor(num);
-  };
-  var toPositiveTimestamp = (value, fallback) => {
-    const num = Number(value);
-    if (!Number.isFinite(num) || num <= 0) return fallback;
-    return Math.floor(num);
-  };
-  var cloneStats = (stats) => ({
-    createdAt: stats.createdAt,
-    garden: { ...stats.garden },
-    shops: { ...stats.shops },
-    pets: {
-      hatchedByType: Object.fromEntries(
-        Object.entries(stats.pets.hatchedByType).map(([key2, counts]) => [key2, { ...counts }])
-      )
-    },
-    abilities: Object.fromEntries(
-      Object.entries(stats.abilities).map(([key2, value]) => [key2, { ...value }])
-    ),
-    weather: Object.fromEntries(
-      Object.entries(stats.weather).map(([key2, value]) => [key2, { ...value }])
-    )
-  });
-  function getStorage() {
-    if (typeof window === "undefined") return null;
-    try {
-      if (typeof window.localStorage === "undefined") return null;
-      return window.localStorage;
-    } catch {
-      return null;
-    }
-  }
-  function createDefaultStats(createdAt = Date.now()) {
-    const hatchedByType = {};
-    for (const species of Object.keys(petCatalog)) {
-      hatchedByType[species.toLowerCase()] = { normal: 0, gold: 0, rainbow: 0 };
-    }
-    const abilities = {};
-    for (const abilityId of Object.keys(petAbilities)) {
-      abilities[abilityId] = { triggers: 0, totalValue: 0 };
-    }
-    const weather2 = {};
-    for (const key2 of Object.keys(weatherCatalog)) {
-      weather2[key2.toLowerCase()] = { triggers: 0 };
-    }
-    return {
-      createdAt,
-      garden: {
-        totalPlanted: 0,
-        totalHarvested: 0,
-        totalDestroyed: 0,
-        watercanUsed: 0,
-        waterTimeSavedMs: 0
-      },
-      shops: {
-        seedsBought: 0,
-        decorBought: 0,
-        eggsBought: 0,
-        toolsBought: 0,
-        cropsSoldCount: 0,
-        cropsSoldValue: 0,
-        petsSoldCount: 0,
-        petsSoldValue: 0
-      },
-      pets: { hatchedByType },
-      abilities,
-      weather: weather2
-    };
-  }
-  function normalizeHatchedCounts(value, fallback) {
-    if (!isRecord(value)) return { ...fallback };
-    return {
-      normal: toPositiveInt(value.normal, fallback.normal),
-      gold: toPositiveInt(value.gold, fallback.gold),
-      rainbow: toPositiveInt(value.rainbow, fallback.rainbow)
-    };
-  }
-  function normalizeStats(raw) {
-    const fallbackCreatedAt = Date.now();
-    const base = createDefaultStats(fallbackCreatedAt);
-    if (!isRecord(raw)) return base;
-    if (Object.prototype.hasOwnProperty.call(raw, "createdAt")) {
-      base.createdAt = toPositiveTimestamp(raw.createdAt, fallbackCreatedAt);
-    }
-    if (isRecord(raw.garden)) {
-      base.garden = {
-        totalPlanted: toPositiveInt(raw.garden.totalPlanted, base.garden.totalPlanted),
-        totalHarvested: toPositiveInt(raw.garden.totalHarvested, base.garden.totalHarvested),
-        totalDestroyed: toPositiveInt(raw.garden.totalDestroyed, base.garden.totalDestroyed),
-        watercanUsed: toPositiveInt(raw.garden.watercanUsed, base.garden.watercanUsed),
-        waterTimeSavedMs: toPositiveInt(raw.garden.waterTimeSavedMs, base.garden.waterTimeSavedMs)
-      };
-    }
-    if (isRecord(raw.shops)) {
-      base.shops = {
-        seedsBought: toPositiveInt(raw.shops.seedsBought, base.shops.seedsBought),
-        decorBought: toPositiveInt(raw.shops.decorBought, base.shops.decorBought),
-        eggsBought: toPositiveInt(raw.shops.eggsBought, base.shops.eggsBought),
-        toolsBought: toPositiveInt(raw.shops.toolsBought, base.shops.toolsBought),
-        cropsSoldCount: toPositiveInt(raw.shops.cropsSoldCount, base.shops.cropsSoldCount),
-        cropsSoldValue: toPositiveNumber(raw.shops.cropsSoldValue, base.shops.cropsSoldValue),
-        petsSoldCount: toPositiveInt(raw.shops.petsSoldCount, base.shops.petsSoldCount),
-        petsSoldValue: toPositiveNumber(raw.shops.petsSoldValue, base.shops.petsSoldValue)
-      };
-    }
-    if (isRecord(raw.pets) && isRecord(raw.pets.hatchedByType)) {
-      for (const [key2, counts] of Object.entries(raw.pets.hatchedByType)) {
-        if (typeof key2 !== "string") continue;
-        const normalizedKey = key2.toLowerCase();
-        const fallback = base.pets.hatchedByType[normalizedKey] ?? { normal: 0, gold: 0, rainbow: 0 };
-        base.pets.hatchedByType[normalizedKey] = normalizeHatchedCounts(counts, fallback);
-      }
-    }
-    if (isRecord(raw.abilities)) {
-      for (const [key2, value] of Object.entries(raw.abilities)) {
-        if (typeof key2 !== "string" || !isRecord(value)) continue;
-        base.abilities[key2] = {
-          triggers: toPositiveInt(value.triggers, base.abilities[key2]?.triggers ?? 0),
-          totalValue: toPositiveNumber(value.totalValue, base.abilities[key2]?.totalValue ?? 0)
-        };
-      }
-    }
-    if (isRecord(raw.weather)) {
-      for (const [key2, value] of Object.entries(raw.weather)) {
-        if (typeof key2 !== "string" || !isRecord(value)) continue;
-        const normalizedKey = key2.toLowerCase();
-        const fallback = base.weather[normalizedKey] ?? { triggers: 0 };
-        base.weather[normalizedKey] = {
-          triggers: toPositiveInt(value.triggers, fallback.triggers)
-        };
-      }
-    }
-    return base;
-  }
-  function readFromStorage() {
-    const storage = getStorage();
-    if (!storage) {
-      if (!memoryStore) memoryStore = createDefaultStats();
-      return cloneStats(memoryStore);
-    }
-    try {
-      const raw = storage.getItem(LS_STATS_KEY);
-      if (!raw) {
-        const fresh = createDefaultStats();
-        memoryStore = cloneStats(fresh);
-        return fresh;
-      }
-      const parsed = JSON.parse(raw);
-      const normalized = normalizeStats(parsed);
-      memoryStore = cloneStats(normalized);
-      return normalized;
-    } catch {
-      const fresh = createDefaultStats();
-      memoryStore = cloneStats(fresh);
-      return fresh;
-    }
-  }
-  function emitUpdate(stats) {
-    const snapshot = cloneStats(stats);
-    for (const listener of listeners) {
-      try {
-        listener(snapshot);
-      } catch (error) {
-        console.error("[StatsService] Listener error", error);
-      }
-    }
-  }
-  function writeToStorage(stats) {
-    const snapshot = cloneStats(stats);
-    const storage = getStorage();
-    memoryStore = snapshot;
-    if (storage) {
-      try {
-        storage.setItem(LS_STATS_KEY, JSON.stringify(snapshot));
-      } catch {
-      }
-    }
-    return snapshot;
-  }
-  function adjustValue(current, delta, integer) {
-    const a = Number(current);
-    const b = Number(delta);
-    const sum = Number.isFinite(a) ? a : 0;
-    const next = sum + (Number.isFinite(b) ? b : 0);
-    const clamped = Math.max(0, next);
-    return integer ? Math.floor(clamped) : clamped;
-  }
-  function updateStats(mutator) {
-    const stats = readFromStorage();
-    const draft = cloneStats(stats);
-    mutator(draft);
-    const stored = writeToStorage(draft);
-    emitUpdate(stored);
-    return stored;
-  }
-  function requireAbilityEntry(stats, abilityId) {
-    if (!stats.abilities[abilityId]) {
-      stats.abilities[abilityId] = { triggers: 0, totalValue: 0 };
-    }
-    return stats.abilities[abilityId];
-  }
-  function requireWeatherEntry(stats, weatherId) {
-    const key2 = weatherId.toLowerCase();
-    if (!stats.weather[key2]) {
-      stats.weather[key2] = { triggers: 0 };
-    }
-    return stats.weather[key2];
-  }
-  function requirePetEntry(stats, species) {
-    const key2 = species.toLowerCase();
-    if (!stats.pets.hatchedByType[key2]) {
-      stats.pets.hatchedByType[key2] = { normal: 0, gold: 0, rainbow: 0 };
-    }
-    return stats.pets.hatchedByType[key2];
-  }
-  var StatsService = {
-    storageKey: LS_STATS_KEY,
-    getSnapshot() {
-      return readFromStorage();
-    },
-    setSnapshot(snapshot) {
-      const normalized = normalizeStats(snapshot);
-      const stored = writeToStorage(normalized);
-      emitUpdate(stored);
-      return stored;
-    },
-    reset() {
-      const fresh = createDefaultStats();
-      const stored = writeToStorage(fresh);
-      emitUpdate(stored);
-      return stored;
-    },
-    update(mutator) {
-      return updateStats(mutator);
-    },
-    incrementGardenStat(key2, amount = 1) {
-      return updateStats((draft) => {
-        draft.garden[key2] = adjustValue(draft.garden[key2], amount, GARDEN_INT_KEYS[key2]);
-      });
-    },
-    incrementShopStat(key2, amount = 1) {
-      return updateStats((draft) => {
-        draft.shops[key2] = adjustValue(draft.shops[key2], amount, SHOP_INT_KEYS[key2]);
-      });
-    },
-    incrementPetHatched(species, rarityKey = "normal", amount = 1) {
-      return updateStats((draft) => {
-        const entry = requirePetEntry(draft, species);
-        entry[rarityKey] = adjustValue(entry[rarityKey], amount, true);
-      });
-    },
-    incrementAbilityStat(abilityId, key2, amount = 1) {
-      return updateStats((draft) => {
-        const entry = requireAbilityEntry(draft, abilityId);
-        entry[key2] = adjustValue(entry[key2], amount, ABILITY_INT_KEYS[key2]);
-      });
-    },
-    incrementWeatherStat(weatherId, key2 = "triggers", amount = 1) {
-      return updateStats((draft) => {
-        const entry = requireWeatherEntry(draft, weatherId);
-        entry[key2] = adjustValue(entry[key2], amount, WEATHER_INT_KEYS[key2]);
-      });
-    },
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    }
-  };
-  var StatsDefaults = {
-    rarityOrder: [
-      rarity.Common,
-      rarity.Uncommon,
-      rarity.Rare,
-      rarity.Legendary,
-      rarity.Mythic,
-      rarity.Divine,
-      rarity.Celestial
-    ],
-    createEmpty() {
-      return createDefaultStats();
-    }
-  };
-
-  // src/hooks/ws-hook.ts
-  function installPageWebSocketHook() {
-    if (!pageWindow || !NativeWS) return;
-    function WrappedWebSocket(url, protocols) {
-      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
-      sockets.push(ws);
-      ws.addEventListener("open", () => {
-        setTimeout(() => {
-          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
-        }, 800);
-      });
-      ws.addEventListener("message", async (ev) => {
-        const j = await parseWSData(ev.data);
-        if (!j) return;
-        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
-          setQWS(ws, "message:" + (j.type || "state"));
-        }
-      });
-      return ws;
-    }
-    WrappedWebSocket.prototype = NativeWS.prototype;
-    try {
-      WrappedWebSocket.OPEN = NativeWS.OPEN;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
-    } catch {
-    }
-    pageWindow.WebSocket = WrappedWebSocket;
-    if (pageWindow !== window) {
-      try {
-        window.WebSocket = WrappedWebSocket;
-      } catch {
-      }
-    }
-    function hasSharedQuinoaWS() {
-      const existing = readSharedGlobal("quinoaWS");
-      return !!existing;
-    }
-    installHarvestCropInterceptor();
-  }
-  var interceptorsByType = /* @__PURE__ */ new Map();
-  var interceptorStatus = readSharedGlobal(
-    "__tmMessageHookInstalled"
-  ) ? "installed" : "idle";
-  var interceptorPoll = null;
-  var interceptorTimeout = null;
-  function registerMessageInterceptor(type, interceptor) {
-    const list = interceptorsByType.get(type);
-    if (list) {
-      list.push(interceptor);
-    } else {
-      interceptorsByType.set(type, [interceptor]);
-    }
-    ensureMessageInterceptorInstalled();
-    return () => {
-      const current = interceptorsByType.get(type);
-      if (!current) return;
-      const index = current.indexOf(interceptor);
-      if (index !== -1) current.splice(index, 1);
-      if (current.length === 0) interceptorsByType.delete(type);
-    };
-  }
-  function ensureMessageInterceptorInstalled() {
-    if (interceptorStatus === "installed" || interceptorStatus === "installing") return;
-    interceptorStatus = "installing";
-    const tryInstall = () => {
-      const Conn = pageWindow.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
-      if (!Conn) return false;
-      const original = resolveSendMessage(Conn);
-      if (!original) return false;
-      const wrap = function(message, ...rest) {
-        let currentMessage = message;
-        try {
-          const type = currentMessage?.type;
-          if (type && interceptorsByType.size > 0) {
-            const context = { thisArg: this, args: rest };
-            const result = applyInterceptors(type, currentMessage, context);
-            if (result.drop) return;
-            currentMessage = result.message;
-          }
-        } catch (error) {
-          console.error("[MG-mod] Erreur dans le hook WS :", error);
-        }
-        return original.fn.call(this, currentMessage, ...rest);
-      };
-      if (original.kind === "static") {
-        Conn.sendMessage = wrap;
-      } else {
-        Conn.prototype.sendMessage = wrap;
-      }
-      interceptorStatus = "installed";
-      shareGlobal("__tmMessageHookInstalled", true);
-      if (interceptorPoll !== null) {
-        clearInterval(interceptorPoll);
-        interceptorPoll = null;
-      }
-      if (interceptorTimeout !== null) {
-        clearTimeout(interceptorTimeout);
-        interceptorTimeout = null;
-      }
-      return true;
-    };
-    if (tryInstall()) return;
-    interceptorPoll = window.setInterval(() => {
-      if (tryInstall()) {
-        if (interceptorPoll !== null) {
-          clearInterval(interceptorPoll);
-          interceptorPoll = null;
-        }
-      }
-    }, 200);
-    interceptorTimeout = window.setTimeout(() => {
-      if (interceptorPoll !== null) {
-        clearInterval(interceptorPoll);
-        interceptorPoll = null;
-      }
-      if (interceptorStatus !== "installed") {
-        interceptorStatus = "idle";
-      }
-      interceptorTimeout = null;
-    }, 2e4);
-  }
-  function applyInterceptors(type, initialMessage, context) {
-    const interceptors = interceptorsByType.get(type);
-    if (!interceptors || interceptors.length === 0) {
-      return { message: initialMessage, drop: false };
-    }
-    let currentMessage = initialMessage;
-    for (const interceptor of [...interceptors]) {
-      try {
-        const result = interceptor(currentMessage, context);
-        if (!result) continue;
-        if (result.kind === "drop") {
-          return { message: currentMessage, drop: true };
-        }
-        if (result.kind === "replace") {
-          currentMessage = result.message;
-        }
-      } catch (error) {
-      }
-    }
-    return { message: currentMessage, drop: false };
-  }
-  function installHarvestCropInterceptor() {
-    if (readSharedGlobal("__tmHarvestHookInstalled")) return;
-    let latestGardenState = null;
-    void (async () => {
-      try {
-        latestGardenState = await Atoms.data.garden.get() ?? null;
-      } catch {
-      }
-      try {
-        await Atoms.data.garden.onChange((next) => {
-          latestGardenState = next ?? null;
-        });
-      } catch {
-      }
-    })();
-    registerMessageInterceptor("HarvestCrop", (message) => {
-      const slot = message.slot;
-      const slotsIndex = message.slotsIndex;
-      if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
-        return;
-      }
-      const garden2 = latestGardenState;
-      const tileObjects = garden2?.tileObjects;
-      const tile = tileObjects ? tileObjects[String(slot)] : void 0;
-      if (!tile || typeof tile !== "object" || tile.objectType !== "plant") {
-        return;
-      }
-      const slots = Array.isArray(tile.slots) ? tile.slots : [];
-      const cropSlot = slots[slotsIndex];
-      if (!cropSlot || typeof cropSlot !== "object") {
-        return;
-      }
-      const seedKey = extractSeedKey2(tile);
-      const sizePercent = extractSizePercent2(cropSlot);
-      const mutations = sanitizeMutations(cropSlot?.mutations);
-      const lockerEnabled = (() => {
-        try {
-          return lockerService.getState().enabled;
-        } catch {
-          return false;
-        }
-      })();
-      if (lockerEnabled) {
-        let harvestAllowed = true;
-        try {
-          harvestAllowed = lockerService.allowsHarvest({
-            seedKey,
-            sizePercent,
-            mutations
-          });
-        } catch {
-          harvestAllowed = true;
-        }
-        if (!harvestAllowed) {
-          console.log("[HarvestCrop] Blocked by locker", {
-            slot,
-            slotsIndex,
-            seedKey,
-            sizePercent,
-            mutations
-          });
-          return { kind: "drop" };
-        }
-      }
-      StatsService.incrementGardenStat("totalHarvested");
-      void (async () => {
-        try {
-          const garden3 = await Atoms.data.garden.get();
-          const tileObjects2 = garden3?.tileObjects ?? null;
-          const tile2 = tileObjects2 ? tileObjects2[String(slot)] : void 0;
-          const cropSlot2 = Array.isArray(tile2?.slots) ? tile2.slots?.[slotsIndex] : void 0;
-          console.log("[HarvestCrop]", {
-            slot,
-            slotsIndex,
-            cropSlot: cropSlot2
-          });
-        } catch (error) {
-          console.error("[HarvestCrop] Unable to log crop slot", error);
-        }
-      })();
-    });
-    registerMessageInterceptor("RemoveGardenObject", (message) => {
-      StatsService.incrementGardenStat("totalDestroyed");
-    });
-    registerMessageInterceptor("WaterPlant", (message) => {
-      StatsService.incrementGardenStat("watercanUsed");
-      StatsService.incrementGardenStat("waterTimeSavedMs", 5 * 60 * 1e3);
-    });
-    registerMessageInterceptor("PlantSeed", (message) => {
-      StatsService.incrementGardenStat("totalPlanted");
-    });
-    registerMessageInterceptor("PurchaseDecor", (message) => {
-      StatsService.incrementShopStat("decorBought");
-    });
-    registerMessageInterceptor("PurchaseSeed", (message) => {
-      StatsService.incrementShopStat("seedsBought");
-    });
-    registerMessageInterceptor("PurchaseEgg", (message) => {
-      StatsService.incrementShopStat("eggsBought");
-    });
-    registerMessageInterceptor("PurchaseTool", (message) => {
-      StatsService.incrementShopStat("toolsBought");
-    });
-    registerMessageInterceptor("HatchEgg", () => {
-      void (async () => {
-        const previousPets = await readInventoryPetSnapshots();
-        const previousMap = buildPetMap(previousPets);
-        const nextPets = await waitForInventoryPetAddition(previousMap);
-        if (!nextPets) return;
-        const newPets = extractNewPets(nextPets, previousMap);
-        if (!newPets.length) return;
-        for (const pet of newPets) {
-          const rarity2 = inferPetRarity(pet.mutations);
-          if (pet.species) {
-            StatsService.incrementPetHatched(pet.species, rarity2);
-          }
-        }
-      })();
-    });
-    registerMessageInterceptor("SellAllCrops", (message) => {
-      void (async () => {
-        try {
-          const items = await Atoms.inventory.myCropItemsToSell.get();
-          const count = Array.isArray(items) ? items.length : 0;
-          if (count > 0) {
-            StatsService.incrementShopStat("cropsSoldCount", count);
-          }
-        } catch (error) {
-          console.error("[SellAllCrops] Unable to read crop items", error);
-        }
-        try {
-          const total = await Atoms.shop.totalCropSellPrice.get();
-          const value = Number(total);
-          if (Number.isFinite(value) && value > 0) {
-            StatsService.incrementShopStat("cropsSoldValue", value);
-          }
-        } catch (error) {
-          console.error("[SellAllCrops] Unable to read crop sell price", error);
-        }
-      })();
-    });
-    registerMessageInterceptor("SellPet", (message) => {
-      StatsService.incrementShopStat("petsSoldCount");
-      void (async () => {
-        try {
-          const total = await Atoms.pets.totalPetSellPrice.get();
-          const value = Number(total);
-          if (Number.isFinite(value) && value > 0) {
-            StatsService.incrementShopStat("petsSoldValue", value);
-          }
-        } catch (error) {
-          console.error("[SellPet] Unable to read pet sell price", error);
-        }
-      })();
-    });
-    shareGlobal("__tmHarvestHookInstalled", true);
-  }
-  function extractSeedKey2(tile) {
-    if (!tile || typeof tile !== "object") return null;
-    if (typeof tile.seedKey === "string" && tile.seedKey) return tile.seedKey;
-    if (typeof tile.species === "string" && tile.species) return tile.species;
-    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
-    for (const key2 of fallbacks) {
-      const value = tile[key2];
-      if (typeof value === "string" && value) return value;
-    }
-    return null;
-  }
-  var normalizeSpeciesKey2 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
-  var MAX_SCALE_BY_SPECIES2 = (() => {
-    const map2 = /* @__PURE__ */ new Map();
-    const register = (key2, value) => {
-      if (typeof key2 !== "string") return;
-      const normalized = normalizeSpeciesKey2(key2.trim());
-      if (!normalized || map2.has(normalized)) return;
-      map2.set(normalized, value);
-    };
-    for (const [species, entry] of Object.entries(plantCatalog)) {
-      const maxScale = Number(entry?.crop?.maxScale);
-      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
-      register(species, maxScale);
-      register(entry?.seed?.name, maxScale);
-      register(entry?.plant?.name, maxScale);
-      register(entry?.crop?.name, maxScale);
-    }
-    return map2;
-  })();
-  function lookupMaxScale2(species) {
-    if (typeof species !== "string") return null;
-    const normalized = normalizeSpeciesKey2(species.trim());
-    if (!normalized) return null;
-    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
-    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
-      return found;
-    }
-    return null;
-  }
-  function getMaxScaleForSlot2(slot) {
-    if (!slot || typeof slot !== "object") return null;
-    const candidates = /* @__PURE__ */ new Set();
-    const fromSeedKey = extractSeedKey2(slot);
-    if (fromSeedKey) candidates.add(fromSeedKey);
-    const fields = [
-      "species",
-      "seedSpecies",
-      "plantSpecies",
-      "cropSpecies",
-      "baseSpecies",
-      "seedKey"
-    ];
-    for (const field of fields) {
-      const value = slot[field];
-      if (typeof value === "string" && value) {
-        candidates.add(value);
-      }
-    }
-    for (const cand of candidates) {
-      const max = lookupMaxScale2(cand);
-      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
-        return max;
-      }
-    }
-    return null;
-  }
-  function extractSizePercent2(slot) {
-    if (!slot || typeof slot !== "object") return 100;
-    const direct = Number(
-      slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
-    );
-    if (Number.isFinite(direct)) {
-      return clampPercent2(Math.round(direct), 0, 100);
-    }
-    const scale = Number(slot.targetScale ?? slot.scale);
-    if (Number.isFinite(scale)) {
-      const maxScale = getMaxScaleForSlot2(slot);
-      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
-        const clamped = Math.max(1, Math.min(maxScale, scale));
-        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
-        return clampPercent2(Math.round(pct2), 50, 100);
-      }
-      if (scale > 1 && scale <= 2) {
-        const pct2 = 50 + (scale - 1) / 1 * 50;
-        return clampPercent2(Math.round(pct2), 50, 100);
-      }
-      const pct = Math.round(scale * 100);
-      return clampPercent2(pct, 0, 100);
-    }
-    return 100;
-  }
-  function sanitizeMutations(raw) {
-    if (!Array.isArray(raw)) return [];
-    const out = [];
-    for (let i = 0; i < raw.length; i++) {
-      const value = raw[i];
-      if (typeof value === "string") {
-        if (value) out.push(value);
-      } else if (value != null) {
-        const str = String(value);
-        if (str) out.push(str);
-      }
-    }
-    return out;
-  }
-  function clampPercent2(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-  var HATCH_EGG_TIMEOUT_MS = 5e3;
-  async function readInventoryPetSnapshots() {
-    try {
-      const inventory = await Atoms.inventory.myInventory.get();
-      return collectInventoryPets(inventory);
-    } catch (error) {
-      console.error("[HatchEgg] Unable to read inventory", error);
-      return [];
-    }
-  }
-  function collectInventoryPets(rawInventory) {
-    const items = extractInventoryItems(rawInventory);
-    const pets = [];
-    for (const entry of items) {
-      const pet = toInventoryPet(entry);
-      if (pet) pets.push(pet);
-    }
-    return pets;
-  }
-  function extractInventoryItems(rawInventory) {
-    if (!rawInventory) return [];
-    if (Array.isArray(rawInventory)) return rawInventory;
-    if (Array.isArray(rawInventory.items)) return rawInventory.items;
-    if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
-    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
-    return [];
-  }
-  function toInventoryPet(entry) {
-    if (!entry || typeof entry !== "object") return null;
-    const source = entry.item && typeof entry.item === "object" ? entry.item : entry;
-    if (!source || typeof source !== "object") return null;
-    const type = source.itemType ?? source.data?.itemType ?? "";
-    if (String(type).toLowerCase() !== "pet") return null;
-    const id = source.id ?? source.data?.id;
-    const species = source.petSpecies ?? source.data?.petSpecies;
-    if (!id || !species) return null;
-    const mutations = sanitizeMutations(source.mutations ?? source.data?.mutations);
-    return {
-      id: String(id),
-      species: String(species),
-      mutations
-    };
-  }
-  function buildPetMap(pets) {
-    const map2 = /* @__PURE__ */ new Map();
-    for (const pet of pets) {
-      map2.set(pet.id, pet);
-    }
-    return map2;
-  }
-  function extractNewPets(pets, previous) {
-    return pets.filter((pet) => !previous.has(pet.id));
-  }
-  function inferPetRarity(mutations) {
-    if (!Array.isArray(mutations) || mutations.length === 0) {
-      return "normal";
-    }
-    const seen = new Set(mutations.map((m) => String(m).toLowerCase()));
-    if (seen.has("rainbow")) return "rainbow";
-    if (seen.has("gold") || seen.has("golden")) return "gold";
-    return "normal";
-  }
-  async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
-    await delay(0);
-    const initial = await readInventoryPetSnapshots();
-    if (hasNewInventoryPet(initial, previous)) {
-      return initial;
-    }
-    return new Promise(async (resolve2) => {
-      let settled = false;
-      let unsub = null;
-      let timer = null;
-      const finalize = (value) => {
-        if (settled) return;
-        settled = true;
-        if (timer !== null) {
-          clearTimeout(timer);
-        }
-        if (unsub) {
-          try {
-            unsub();
-          } catch {
-          }
-        }
-        resolve2(value);
-      };
-      const evaluate = (source) => {
-        const pets = collectInventoryPets(source);
-        if (hasNewInventoryPet(pets, previous)) {
-          finalize(pets);
-        }
-      };
-      try {
-        unsub = await Atoms.inventory.myInventory.onChange((next) => {
-          evaluate(next);
-        });
-      } catch (error) {
-        console.error("[HatchEgg] Unable to observe inventory", error);
-        finalize(null);
-        return;
-      }
-      timer = setTimeout(() => {
-        void (async () => {
-          const latest = await readInventoryPetSnapshots();
-          if (hasNewInventoryPet(latest, previous)) {
-            finalize(latest);
-          } else {
-            finalize(null);
-          }
-        })();
-      }, timeoutMs);
-    });
-  }
-  function hasNewInventoryPet(pets, previous) {
-    return pets.some((pet) => !previous.has(pet.id));
-  }
-  function delay(ms) {
-    return new Promise((resolve2) => setTimeout(resolve2, ms));
-  }
-  function resolveSendMessage(Conn) {
-    const isFn = (value) => typeof value === "function";
-    if (isFn(Conn.sendMessage)) {
-      return { kind: "static", fn: Conn.sendMessage.bind(Conn) };
-    }
-    if (Conn.prototype && isFn(Conn.prototype.sendMessage)) {
-      return { kind: "proto", fn: Conn.prototype.sendMessage };
-    }
-    return null;
-  }
-
   // src/core/webSocketBridge.ts
   function postAllToWorkers(msg) {
     if (Workers.forEach) Workers.forEach((w) => {
@@ -7386,6 +6512,1825 @@
       autoRestoreMs: opts?.autoRestoreMs
     });
     if (shouldOpen) await openJournalModal();
+  }
+
+  // src/ui/toast.ts
+  async function sendToast(toast) {
+    const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
+    if (sendAtom) {
+      await jSet(sendAtom, toast);
+      return;
+    }
+    const listAtom = getAtomByLabel("quinoaToastsAtom");
+    if (!listAtom) throw new Error("Aucun atom de toast trouv\xE9");
+    const prev = await jGet(listAtom).catch(() => []);
+    const t = { isClosable: true, duration: 1e4, ...toast };
+    if ("toastType" in t && t.toastType === "board") {
+      t.id = t.id ?? (t.isStackable ? `quinoa-stackable-${Date.now()}-${Math.random()}` : "quinoa-game-toast");
+    } else {
+      t.id = t.id ?? "quinoa-game-toast";
+    }
+    await jSet(listAtom, [...prev, t]);
+  }
+  async function toastSimple(title, description, variant = "info", duration = 3500) {
+    await sendToast({ title, description, variant, duration });
+  }
+
+  // src/services/misc.ts
+  var LS_GHOST_KEY = "qws:player:ghostMode";
+  var LS_DELAY_KEY = "qws:ghost:delayMs";
+  var DEFAULT_DELAY_MS = 50;
+  var readGhostEnabled = (def = false) => {
+    try {
+      return localStorage.getItem(LS_GHOST_KEY) === "1";
+    } catch {
+      return def;
+    }
+  };
+  var writeGhostEnabled = (v) => {
+    try {
+      localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
+    } catch (err) {
+    }
+  };
+  var getGhostDelayMs = () => {
+    try {
+      const n = Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS);
+      return Math.max(5, n);
+    } catch {
+      return DEFAULT_DELAY_MS;
+    }
+  };
+  var setGhostDelayMs = (n) => {
+    const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
+    try {
+      localStorage.setItem(LS_DELAY_KEY, String(v));
+    } catch (err) {
+    }
+  };
+  var LS_BLOCK_SELL_CROPS = "qws:sell:blockCrops";
+  var readBlockSellCrops = (def = false) => {
+    try {
+      return localStorage.getItem(LS_BLOCK_SELL_CROPS) === "1";
+    } catch {
+      return def;
+    }
+  };
+  var writeBlockSellCrops = (on) => {
+    try {
+      localStorage.setItem(LS_BLOCK_SELL_CROPS, on ? "1" : "0");
+    } catch {
+    }
+  };
+  var LS_ALERTS_PET_FOOD = "qws:alerts:petFood";
+  var readPetFoodToggle = (def = false) => {
+    try {
+      return localStorage.getItem(LS_ALERTS_PET_FOOD) === "1";
+    } catch {
+      return def;
+    }
+  };
+  var writePetFoodToggle = (on) => {
+    try {
+      localStorage.setItem(LS_ALERTS_PET_FOOD, on ? "1" : "0");
+    } catch {
+    }
+  };
+  var LS_ALERTS_PET_FOOD_SPECIES = "qws:alerts:petFood:species";
+  var normalizeSpeciesKey2 = (value) => String(value || "").toLowerCase().replace(/[\'’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var readPetFoodSpeciesSet = () => {
+    try {
+      const raw = localStorage.getItem(LS_ALERTS_PET_FOOD_SPECIES);
+      if (!raw) return /* @__PURE__ */ new Set();
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr.map((x) => normalizeSpeciesKey2(String(x))));
+      return /* @__PURE__ */ new Set();
+    } catch {
+      return /* @__PURE__ */ new Set();
+    }
+  };
+  var writePetFoodSpeciesSet = (values) => {
+    try {
+      const arr = Array.from(values).map((x) => normalizeSpeciesKey2(String(x)));
+      localStorage.setItem(LS_ALERTS_PET_FOOD_SPECIES, JSON.stringify(arr));
+    } catch {
+    }
+  };
+  var readPetFoodForSpecies = (species) => {
+    const set2 = readPetFoodSpeciesSet();
+    return set2.has(normalizeSpeciesKey2(species));
+  };
+  var writePetFoodForSpecies = (species, on) => {
+    const set2 = readPetFoodSpeciesSet();
+    const key2 = normalizeSpeciesKey2(species);
+    if (on) set2.add(key2);
+    else set2.delete(key2);
+    writePetFoodSpeciesSet(set2);
+  };
+  function createGhostController() {
+    let DELAY_MS = getGhostDelayMs();
+    const KEYS = /* @__PURE__ */ new Set();
+    const onKeyDownCapture = (e) => {
+      const k = e.key.toLowerCase();
+      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
+      if (!isMove) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.repeat) return;
+      KEYS.add(k);
+    };
+    const onKeyUpCapture = (e) => {
+      const k = e.key.toLowerCase();
+      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
+      if (!isMove) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      KEYS.delete(k);
+    };
+    const onBlur = () => {
+      KEYS.clear();
+    };
+    const onVisibility = () => {
+      if (document.hidden) KEYS.clear();
+    };
+    function getDir() {
+      let dx = 0, dy = 0;
+      if (KEYS.has("z") || KEYS.has("w") || KEYS.has("arrowup")) dy -= 1;
+      if (KEYS.has("s") || KEYS.has("arrowdown")) dy += 1;
+      if (KEYS.has("q") || KEYS.has("a") || KEYS.has("arrowleft")) dx -= 1;
+      if (KEYS.has("d") || KEYS.has("arrowright")) dx += 1;
+      if (dx) dx = dx > 0 ? 1 : -1;
+      if (dy) dy = dy > 0 ? 1 : -1;
+      return { dx, dy };
+    }
+    let rafId = null;
+    let lastTs = 0, accMs = 0, inMove = false;
+    async function step(dx, dy) {
+      let cur;
+      try {
+        cur = await PlayerService.getPosition();
+      } catch (err) {
+      }
+      const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
+      try {
+        await PlayerService.move(cx + dx, cy + dy);
+      } catch (err) {
+      }
+    }
+    const CAPTURE = { capture: true };
+    function frame(ts) {
+      if (!lastTs) lastTs = ts;
+      const dt = ts - lastTs;
+      lastTs = ts;
+      const { dx, dy } = getDir();
+      accMs += dt;
+      if (dx === 0 && dy === 0) {
+        accMs = Math.min(accMs, DELAY_MS * 4);
+        rafId = requestAnimationFrame(frame);
+        return;
+      }
+      if (accMs >= DELAY_MS && !inMove) {
+        accMs -= DELAY_MS;
+        inMove = true;
+        (async () => {
+          try {
+            await step(dx, dy);
+          } finally {
+            inMove = false;
+          }
+        })();
+      }
+      accMs = Math.min(accMs, DELAY_MS * 4);
+      rafId = requestAnimationFrame(frame);
+    }
+    return {
+      start() {
+        if (rafId !== null) return;
+        lastTs = 0;
+        accMs = 0;
+        inMove = false;
+        window.addEventListener("keydown", onKeyDownCapture, CAPTURE);
+        window.addEventListener("keyup", onKeyUpCapture, CAPTURE);
+        window.addEventListener("blur", onBlur);
+        document.addEventListener("visibilitychange", onVisibility);
+        rafId = requestAnimationFrame(frame);
+      },
+      stop() {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        KEYS.clear();
+        window.removeEventListener("keydown", onKeyDownCapture, CAPTURE);
+        window.removeEventListener("keyup", onKeyUpCapture, CAPTURE);
+        window.removeEventListener("blur", onBlur);
+        document.removeEventListener("visibilitychange", onVisibility);
+      },
+      setSpeed(n) {
+        const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
+        DELAY_MS = v;
+        setGhostDelayMs(v);
+      },
+      getSpeed() {
+        return DELAY_MS;
+      }
+    };
+  }
+  var selectedMap = /* @__PURE__ */ new Map();
+  var seedStockByName = /* @__PURE__ */ new Map();
+  var seedSourceCache = [];
+  var NF_US = new Intl.NumberFormat("en-US");
+  var formatNum = (n) => NF_US.format(Math.max(0, Math.floor(n || 0)));
+  async function clearUiSelectionAtoms() {
+    try {
+      await Atoms.inventory.mySelectedItemName.set(null);
+    } catch {
+    }
+    try {
+      await Atoms.inventory.myValidatedSelectedItemIndex.set(null);
+    } catch {
+    }
+    try {
+      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+    } catch {
+    }
+  }
+  var OVERLAY_ID = "qws-seeddeleter-overlay";
+  var LIST_ID = "qws-seeddeleter-list";
+  var SUMMARY_ID = "qws-seeddeleter-summary";
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+  function buildDisplayNameToSpeciesFromCatalog() {
+    const map2 = /* @__PURE__ */ new Map();
+    try {
+      const cat = plantCatalog;
+      for (const species of Object.keys(cat || {})) {
+        const seedName = cat?.[species]?.seed?.name && String(cat?.[species]?.seed?.name) || `${species} Seed`;
+        const arr = map2.get(seedName) ?? [];
+        arr.push(species);
+        map2.set(seedName, arr);
+      }
+    } catch {
+    }
+    return map2;
+  }
+  async function buildSpeciesStockFromInventory() {
+    const inv = await getMySeedInventory();
+    const stock = /* @__PURE__ */ new Map();
+    for (const it of inv) {
+      const q = Math.max(0, Math.floor(it.quantity || 0));
+      if (q > 0) stock.set(it.species, (stock.get(it.species) ?? 0) + q);
+    }
+    return stock;
+  }
+  function allocateForRequestedName(requested, nameToSpecies, speciesStock) {
+    let remaining = Math.max(0, Math.floor(requested.qty || 0));
+    let candidates = nameToSpecies.get(requested.name) ?? [];
+    if (!candidates.length && / seed$/i.test(requested.name)) {
+      const fallbackSpecies = requested.name.replace(/\s+seed$/i, "");
+      if (plantCatalog?.[fallbackSpecies]) candidates = [fallbackSpecies];
+    }
+    if (!candidates.length || remaining <= 0) return [];
+    const ranked = candidates.map((sp) => ({ sp, available: speciesStock.get(sp) ?? 0 })).filter((x) => x.available > 0).sort((a, b) => b.available - a.available);
+    const out = [];
+    for (const { sp, available } of ranked) {
+      if (remaining <= 0) break;
+      const take = Math.min(available, remaining);
+      if (take > 0) {
+        out.push({ species: sp, qty: take });
+        remaining -= take;
+      }
+    }
+    return out;
+  }
+  var _seedDeleteAbort = null;
+  var _seedDeleteBusy = false;
+  async function deleteSelectedSeeds(opts = {}) {
+    if (_seedDeleteBusy) {
+      await toastSimple("Seed deleter", "Deletion already in progress.", "info");
+      return;
+    }
+    const batchSize = Math.max(1, Math.floor(opts.batchSize ?? 25));
+    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 16));
+    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedMap.values())).map((s) => ({ name: s.name, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
+    if (selection.length === 0) {
+      await toastSimple("Seed deleter", "No seeds selected.", "info");
+      return;
+    }
+    const nameToSpecies = buildDisplayNameToSpeciesFromCatalog();
+    const speciesStock = await buildSpeciesStockFromInventory();
+    const allocatedBySpecies = /* @__PURE__ */ new Map();
+    let requestedTotal = 0, cappedTotal = 0;
+    for (const req of selection) {
+      requestedTotal += req.qty;
+      const chunks = allocateForRequestedName(req, nameToSpecies, speciesStock);
+      const okForThis = chunks.reduce((a, c) => a + c.qty, 0);
+      cappedTotal += okForThis;
+      for (const c of chunks) {
+        allocatedBySpecies.set(c.species, (allocatedBySpecies.get(c.species) ?? 0) + c.qty);
+      }
+    }
+    if (cappedTotal <= 0) {
+      await toastSimple("Seed deleter", "Nothing to delete (not in inventory).", "info");
+      return;
+    }
+    if (cappedTotal < requestedTotal) {
+      await toastSimple(
+        "Seed deleter",
+        `Requested ${formatNum(requestedTotal)} but only ${formatNum(cappedTotal)} available. Proceeding.`,
+        "info"
+      );
+    }
+    const tasks = Array.from(allocatedBySpecies.entries()).map(([species, qty]) => ({ species, qty: Math.max(0, Math.floor(qty || 0)) })).filter((t) => t.qty > 0);
+    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
+    if (total <= 0) {
+      await toastSimple("Seed deleter", "Nothing to delete.", "info");
+      return;
+    }
+    _seedDeleteBusy = true;
+    const abort = new AbortController();
+    _seedDeleteAbort = abort;
+    try {
+      await toastSimple("Seed deleter", `Deleting ${formatNum(total)} seeds across ${tasks.length} species...`, "info");
+      let done = 0;
+      for (const t of tasks) {
+        let remaining = t.qty;
+        while (remaining > 0) {
+          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
+          const n = Math.min(batchSize, remaining);
+          for (let i = 0; i < n; i++) {
+            try {
+              await PlayerService.wish(t.species);
+            } catch (err) {
+            }
+          }
+          done += n;
+          remaining -= n;
+          try {
+            opts.onProgress?.({ done, total, species: t.species, remainingForSpecies: remaining });
+            window.dispatchEvent(new CustomEvent("qws:seeddeleter:progress", {
+              detail: { done, total, species: t.species, remainingForSpecies: remaining }
+            }));
+          } catch {
+          }
+          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
+        }
+      }
+      if (!opts.keepSelection) selectedMap.clear();
+      try {
+        window.dispatchEvent(new CustomEvent("qws:seeddeleter:done", { detail: { total, speciesCount: tasks.length } }));
+      } catch {
+      }
+      await toastSimple("Seed deleter", `Deleted ${formatNum(total)} seeds (${tasks.length} species).`, "success");
+    } catch (e) {
+      const msg = e?.message || "Deletion failed.";
+      try {
+        window.dispatchEvent(new CustomEvent("qws:seeddeleter:error", { detail: { message: msg } }));
+      } catch {
+      }
+      await toastSimple("Seed deleter", msg, "error");
+    } finally {
+      _seedDeleteBusy = false;
+      _seedDeleteAbort = null;
+    }
+  }
+  function cancelSeedDeletion() {
+    try {
+      _seedDeleteAbort?.abort();
+    } catch (err) {
+    }
+  }
+  function isSeedDeletionRunning() {
+    return _seedDeleteBusy;
+  }
+  try {
+    window.addEventListener("qws:seeddeleter:apply", async (e) => {
+      try {
+        const selection = Array.isArray(e?.detail?.selection) ? e.detail.selection : void 0;
+        await deleteSelectedSeeds({ selection, batchSize: 25, delayMs: 16, keepSelection: false });
+      } catch {
+      }
+    });
+  } catch {
+  }
+  function seedDisplayNameFromSpecies(species) {
+    try {
+      const node = plantCatalog?.[species];
+      const n = node?.seed?.name;
+      if (typeof n === "string" && n) return n;
+    } catch {
+    }
+    return `${species} Seed`;
+  }
+  function normalizeSeedItem(x, _idx) {
+    if (!x || typeof x !== "object") return null;
+    const species = typeof x.species === "string" ? x.species.trim() : "";
+    const itemType = x.itemType === "Seed" ? "Seed" : null;
+    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
+    if (!species || itemType !== "Seed" || quantity <= 0) return null;
+    return { species, itemType: "Seed", quantity, id: `seed:${species}` };
+  }
+  async function getMySeedInventory() {
+    try {
+      const raw = await Atoms.inventory.mySeedInventory.get();
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      raw.forEach((x, i) => {
+        const s = normalizeSeedItem(x, i);
+        if (s) out.push(s);
+      });
+      return out;
+    } catch {
+      return [];
+    }
+  }
+  function buildInventoryShapeFrom(items) {
+    return { items, favoritedItemIds: [] };
+  }
+  function setStyles(el2, styles) {
+    Object.assign(el2.style, styles);
+  }
+  function styleOverlayBox(div) {
+    div.id = OVERLAY_ID;
+    setStyles(div, {
+      position: "fixed",
+      left: "12px",
+      top: "12px",
+      zIndex: "999999",
+      display: "grid",
+      gridTemplateRows: "auto auto 1px 1fr auto",
+      gap: "6px",
+      minWidth: "320px",
+      maxWidth: "420px",
+      maxHeight: "52vh",
+      padding: "8px",
+      border: "1px solid #39424c",
+      borderRadius: "10px",
+      background: "rgba(22,27,34,0.92)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      backdropFilter: "blur(2px)",
+      userSelect: "none",
+      fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial",
+      fontSize: "12px",
+      lineHeight: "1.25"
+    });
+    div.dataset["qwsSeedDeleter"] = "1";
+  }
+  function makeDraggable(root, handle) {
+    let dragging = false;
+    let ox = 0, oy = 0;
+    const onDown = (e) => {
+      dragging = true;
+      const r = root.getBoundingClientRect();
+      ox = e.clientX - r.left;
+      oy = e.clientY - r.top;
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp, { once: true });
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const nx = Math.max(4, e.clientX - ox);
+      const ny = Math.max(4, e.clientY - oy);
+      root.style.left = `${nx}px`;
+      root.style.top = `${ny}px`;
+    };
+    const onUp = () => {
+      dragging = false;
+      document.removeEventListener("mousemove", onMove);
+    };
+    handle.addEventListener("mousedown", onDown);
+  }
+  function createButton(label2, styleOverride) {
+    const b = document.createElement("button");
+    b.textContent = label2;
+    setStyles(b, {
+      padding: "4px 8px",
+      borderRadius: "8px",
+      border: "1px solid #4446",
+      background: "#161b22",
+      color: "#E7EEF7",
+      cursor: "pointer",
+      fontWeight: "600",
+      fontSize: "12px",
+      ...styleOverride
+    });
+    b.onmouseenter = () => b.style.borderColor = "#6aa1";
+    b.onmouseleave = () => b.style.borderColor = "#4446";
+    return b;
+  }
+  var overlayKeyGuardsOn = false;
+  function isInsideOverlay(el2) {
+    return !!(el2 && el2.closest?.(`#${OVERLAY_ID}`));
+  }
+  function keyGuardCapture(e) {
+    const ae = document.activeElement;
+    if (!isInsideOverlay(ae)) return;
+    const tag = (ae?.tagName || "").toLowerCase();
+    const isEditable = tag === "input" || tag === "textarea" || ae && ae.isContentEditable;
+    if (!isEditable) return;
+    if (/^[0-9]$/.test(e.key)) {
+      e.stopImmediatePropagation();
+    }
+  }
+  function installOverlayKeyGuards() {
+    if (overlayKeyGuardsOn) return;
+    window.addEventListener("keydown", keyGuardCapture, { capture: true });
+    overlayKeyGuardsOn = true;
+  }
+  function removeOverlayKeyGuards() {
+    if (!overlayKeyGuardsOn) return;
+    window.removeEventListener("keydown", keyGuardCapture, { capture: true });
+    overlayKeyGuardsOn = false;
+  }
+  async function closeSeedInventoryPanel() {
+    try {
+      await fakeInventoryHide();
+    } catch {
+      try {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      } catch {
+      }
+    }
+  }
+  function createSeedOverlay() {
+    const box = document.createElement("div");
+    styleOverlayBox(box);
+    const header = document.createElement("div");
+    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
+    const title = document.createElement("div");
+    title.textContent = "\u{1F3AF} Selection mode";
+    setStyles(title, { fontWeight: "700", fontSize: "13px" });
+    const hint = document.createElement("div");
+    hint.textContent = "Click seeds in inventory to toggle selection.";
+    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
+    const hr = document.createElement("div");
+    setStyles(hr, { height: "1px", background: "#2d333b" });
+    const list = document.createElement("div");
+    list.id = LIST_ID;
+    setStyles(list, {
+      minHeight: "44px",
+      maxHeight: "26vh",
+      overflow: "auto",
+      padding: "4px",
+      border: "1px dashed #39424c",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.84)",
+      userSelect: "text"
+    });
+    const actions = document.createElement("div");
+    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
+    const summary = document.createElement("div");
+    summary.id = SUMMARY_ID;
+    setStyles(summary, { fontWeight: "600" });
+    summary.textContent = "Selected: 0 species \xB7 0 seeds";
+    const btnClear = createButton("Clear");
+    btnClear.title = "Clear selection";
+    btnClear.onclick = async () => {
+      selectedMap.clear();
+      refreshList();
+      updateSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeSeedInventoryWithSelection();
+    };
+    _btnConfirm = createButton("Confirm", { background: "#1F2328CC" });
+    _btnConfirm.disabled = true;
+    _btnConfirm.onclick = async () => {
+      await closeSeedInventoryPanel();
+    };
+    header.append(title);
+    actions.append(summary, btnClear, _btnConfirm);
+    box.append(header, hint, hr, list, actions);
+    makeDraggable(box, header);
+    return box;
+  }
+  function showSeedOverlay() {
+    if (document.getElementById(OVERLAY_ID)) return;
+    const el2 = createSeedOverlay();
+    document.body.appendChild(el2);
+    installOverlayKeyGuards();
+    refreshList();
+    updateSummary();
+  }
+  function hideSeedOverlay() {
+    const el2 = document.getElementById(OVERLAY_ID);
+    if (el2) el2.remove();
+    removeOverlayKeyGuards();
+  }
+  var _btnConfirm = null;
+  var unsubSelectedName = null;
+  function renderListRow(item) {
+    const row = document.createElement("div");
+    setStyles(row, {
+      display: "grid",
+      gridTemplateColumns: "1fr auto",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 6px",
+      borderBottom: "1px dashed #2d333b"
+    });
+    const name = document.createElement("div");
+    name.textContent = item.name;
+    setStyles(name, {
+      fontSize: "12px",
+      fontWeight: "600",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    });
+    const controls = document.createElement("div");
+    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
+    const qty = document.createElement("input");
+    qty.type = "number";
+    qty.min = "1";
+    qty.max = String(Math.max(1, item.maxQty));
+    qty.step = "1";
+    qty.value = String(item.qty);
+    qty.className = "qmm-input";
+    setStyles(qty, {
+      width: "68px",
+      height: "28px",
+      border: "1px solid #4446",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.90)",
+      padding: "0 8px",
+      fontSize: "12px"
+    });
+    const swallowDigits = (e) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    qty.addEventListener("keydown", swallowDigits);
+    qty.onchange = () => {
+      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
+      qty.value = String(v);
+      const cur = selectedMap.get(item.name);
+      if (!cur) return;
+      cur.qty = v;
+      selectedMap.set(item.name, cur);
+      updateSummary();
+    };
+    qty.oninput = qty.onchange;
+    const remove = createButton("Remove", { background: "transparent" });
+    remove.onclick = async () => {
+      selectedMap.delete(item.name);
+      refreshList();
+      updateSummary();
+      await repatchFakeSeedInventoryWithSelection();
+    };
+    controls.append(qty, remove);
+    row.append(name, controls);
+    return row;
+  }
+  function refreshList() {
+    const list = document.getElementById(LIST_ID);
+    if (!list) return;
+    list.innerHTML = "";
+    const entries = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "No seeds selected.";
+      empty.style.opacity = "0.8";
+      list.appendChild(empty);
+      return;
+    }
+    for (const it of entries) list.appendChild(renderListRow(it));
+  }
+  function totalSelected() {
+    let species = 0, qty = 0;
+    for (const it of selectedMap.values()) {
+      species += 1;
+      qty += it.qty;
+    }
+    return { species, qty };
+  }
+  function updateSummary() {
+    const { species, qty } = totalSelected();
+    const el2 = document.getElementById(SUMMARY_ID);
+    if (el2) el2.textContent = `Selected: ${species} species \xB7 ${formatNum(qty)} seeds`;
+    if (_btnConfirm) {
+      _btnConfirm.textContent = "Confirm";
+      _btnConfirm.disabled = qty <= 0;
+      _btnConfirm.style.opacity = qty <= 0 ? "0.6" : "1";
+      _btnConfirm.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
+    }
+  }
+  async function repatchFakeSeedInventoryWithSelection() {
+    const selectedNames = new Set(Array.from(selectedMap.keys()));
+    const filtered = (Array.isArray(seedSourceCache) ? seedSourceCache : []).filter((s) => {
+      const disp = seedDisplayNameFromSpecies(s.species);
+      return !selectedNames.has(disp);
+    });
+    try {
+      await fakeInventoryShow({ items: filtered, favoritedItemIds: [] }, { open: false });
+    } catch {
+    }
+  }
+  async function beginSelectedNameListener() {
+    if (unsubSelectedName) return;
+    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
+      const n = (name || "").trim();
+      if (!n) return;
+      if (selectedMap.has(n)) {
+        selectedMap.delete(n);
+      } else {
+        const max = Math.max(1, seedStockByName.get(n) ?? 1);
+        selectedMap.set(n, { name: n, qty: max, maxQty: max });
+      }
+      refreshList();
+      updateSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeSeedInventoryWithSelection();
+    });
+    unsubSelectedName = typeof unsub === "function" ? unsub : null;
+  }
+  async function endSelectedNameListener() {
+    const fn = unsubSelectedName;
+    unsubSelectedName = null;
+    try {
+      await fn?.();
+    } catch {
+    }
+  }
+  async function openSeedInventoryPreview() {
+    try {
+      const src = await getMySeedInventory();
+      if (!src.length) {
+        await toastSimple("Seed inventory", "No seeds to display.", "info");
+        return;
+      }
+      await fakeInventoryShow(buildInventoryShapeFrom(src), { open: true });
+    } catch (e) {
+      await toastSimple("Seed inventory", e?.message || "Failed to open seed inventory.", "error");
+    }
+  }
+  async function openSeedSelectorFlow(setWindowVisible) {
+    try {
+      setWindowVisible?.(false);
+      seedSourceCache = await getMySeedInventory();
+      seedStockByName = /* @__PURE__ */ new Map();
+      for (const s of seedSourceCache) {
+        const display = seedDisplayNameFromSpecies(s.species);
+        seedStockByName.set(display, Math.max(1, Math.floor(s.quantity || 0)));
+      }
+      selectedMap.clear();
+      showSeedOverlay();
+      await beginSelectedNameListener();
+      await fakeInventoryShow(buildInventoryShapeFrom(seedSourceCache), { open: true });
+      if (await isInventoryPanelOpen()) {
+        await waitInventoryPanelClosed();
+      }
+    } catch (e) {
+      await toastSimple("Seed inventory", e?.message || "Failed to open seed selector.", "error");
+    } finally {
+      await endSelectedNameListener();
+      hideSeedOverlay();
+      seedSourceCache = [];
+      seedStockByName.clear();
+      setWindowVisible?.(true);
+    }
+  }
+  var MiscService = {
+    // ghost
+    readGhostEnabled,
+    writeGhostEnabled,
+    getGhostDelayMs,
+    setGhostDelayMs,
+    createGhostController,
+    // selling controls
+    readBlockSellCrops,
+    writeBlockSellCrops,
+    // alerts controls
+    readPetFoodToggle,
+    writePetFoodToggle,
+    readPetFoodSpeciesSet,
+    writePetFoodSpeciesSet,
+    readPetFoodForSpecies,
+    writePetFoodForSpecies,
+    // seeds
+    getMySeedInventory,
+    openSeedInventoryPreview,
+    openSeedSelectorFlow,
+    //delete
+    deleteSelectedSeeds,
+    cancelSeedDeletion,
+    isSeedDeletionRunning,
+    getCurrentSeedSelection() {
+      return Array.from(selectedMap.values());
+    },
+    clearSeedSelection() {
+      selectedMap.clear();
+    }
+  };
+
+  // src/services/stats.ts
+  var LS_STATS_KEY = "qws:stats:v1";
+  var GARDEN_INT_KEYS = {
+    totalPlanted: true,
+    totalHarvested: true,
+    totalDestroyed: true,
+    watercanUsed: true,
+    waterTimeSavedMs: true
+  };
+  var SHOP_INT_KEYS = {
+    seedsBought: true,
+    decorBought: true,
+    eggsBought: true,
+    toolsBought: true,
+    cropsSoldCount: true,
+    cropsSoldValue: false,
+    petsSoldCount: true,
+    petsSoldValue: false
+  };
+  var ABILITY_INT_KEYS = {
+    triggers: true,
+    totalValue: false
+  };
+  var WEATHER_INT_KEYS = {
+    triggers: true
+  };
+  var memoryStore = null;
+  var listeners = /* @__PURE__ */ new Set();
+  var isRecord = (value) => typeof value === "object" && value !== null;
+  var toNumber = (value, fallback = 0) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return num;
+  };
+  var toPositiveNumber = (value, fallback = 0) => {
+    const num = toNumber(value, fallback);
+    return Math.max(0, num);
+  };
+  var toPositiveInt = (value, fallback = 0) => {
+    const num = toPositiveNumber(value, fallback);
+    return Math.floor(num);
+  };
+  var toPositiveTimestamp = (value, fallback) => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return fallback;
+    return Math.floor(num);
+  };
+  var cloneStats = (stats) => ({
+    createdAt: stats.createdAt,
+    garden: { ...stats.garden },
+    shops: { ...stats.shops },
+    pets: {
+      hatchedByType: Object.fromEntries(
+        Object.entries(stats.pets.hatchedByType).map(([key2, counts]) => [key2, { ...counts }])
+      )
+    },
+    abilities: Object.fromEntries(
+      Object.entries(stats.abilities).map(([key2, value]) => [key2, { ...value }])
+    ),
+    weather: Object.fromEntries(
+      Object.entries(stats.weather).map(([key2, value]) => [key2, { ...value }])
+    )
+  });
+  function getStorage() {
+    if (typeof window === "undefined") return null;
+    try {
+      if (typeof window.localStorage === "undefined") return null;
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  }
+  function createDefaultStats(createdAt = Date.now()) {
+    const hatchedByType = {};
+    for (const species of Object.keys(petCatalog)) {
+      hatchedByType[species.toLowerCase()] = { normal: 0, gold: 0, rainbow: 0 };
+    }
+    const abilities = {};
+    for (const abilityId of Object.keys(petAbilities)) {
+      abilities[abilityId] = { triggers: 0, totalValue: 0 };
+    }
+    const weather2 = {};
+    for (const key2 of Object.keys(weatherCatalog)) {
+      weather2[key2.toLowerCase()] = { triggers: 0 };
+    }
+    return {
+      createdAt,
+      garden: {
+        totalPlanted: 0,
+        totalHarvested: 0,
+        totalDestroyed: 0,
+        watercanUsed: 0,
+        waterTimeSavedMs: 0
+      },
+      shops: {
+        seedsBought: 0,
+        decorBought: 0,
+        eggsBought: 0,
+        toolsBought: 0,
+        cropsSoldCount: 0,
+        cropsSoldValue: 0,
+        petsSoldCount: 0,
+        petsSoldValue: 0
+      },
+      pets: { hatchedByType },
+      abilities,
+      weather: weather2
+    };
+  }
+  function normalizeHatchedCounts(value, fallback) {
+    if (!isRecord(value)) return { ...fallback };
+    return {
+      normal: toPositiveInt(value.normal, fallback.normal),
+      gold: toPositiveInt(value.gold, fallback.gold),
+      rainbow: toPositiveInt(value.rainbow, fallback.rainbow)
+    };
+  }
+  function normalizeStats(raw) {
+    const fallbackCreatedAt = Date.now();
+    const base = createDefaultStats(fallbackCreatedAt);
+    if (!isRecord(raw)) return base;
+    if (Object.prototype.hasOwnProperty.call(raw, "createdAt")) {
+      base.createdAt = toPositiveTimestamp(raw.createdAt, fallbackCreatedAt);
+    }
+    if (isRecord(raw.garden)) {
+      base.garden = {
+        totalPlanted: toPositiveInt(raw.garden.totalPlanted, base.garden.totalPlanted),
+        totalHarvested: toPositiveInt(raw.garden.totalHarvested, base.garden.totalHarvested),
+        totalDestroyed: toPositiveInt(raw.garden.totalDestroyed, base.garden.totalDestroyed),
+        watercanUsed: toPositiveInt(raw.garden.watercanUsed, base.garden.watercanUsed),
+        waterTimeSavedMs: toPositiveInt(raw.garden.waterTimeSavedMs, base.garden.waterTimeSavedMs)
+      };
+    }
+    if (isRecord(raw.shops)) {
+      base.shops = {
+        seedsBought: toPositiveInt(raw.shops.seedsBought, base.shops.seedsBought),
+        decorBought: toPositiveInt(raw.shops.decorBought, base.shops.decorBought),
+        eggsBought: toPositiveInt(raw.shops.eggsBought, base.shops.eggsBought),
+        toolsBought: toPositiveInt(raw.shops.toolsBought, base.shops.toolsBought),
+        cropsSoldCount: toPositiveInt(raw.shops.cropsSoldCount, base.shops.cropsSoldCount),
+        cropsSoldValue: toPositiveNumber(raw.shops.cropsSoldValue, base.shops.cropsSoldValue),
+        petsSoldCount: toPositiveInt(raw.shops.petsSoldCount, base.shops.petsSoldCount),
+        petsSoldValue: toPositiveNumber(raw.shops.petsSoldValue, base.shops.petsSoldValue)
+      };
+    }
+    if (isRecord(raw.pets) && isRecord(raw.pets.hatchedByType)) {
+      for (const [key2, counts] of Object.entries(raw.pets.hatchedByType)) {
+        if (typeof key2 !== "string") continue;
+        const normalizedKey = key2.toLowerCase();
+        const fallback = base.pets.hatchedByType[normalizedKey] ?? { normal: 0, gold: 0, rainbow: 0 };
+        base.pets.hatchedByType[normalizedKey] = normalizeHatchedCounts(counts, fallback);
+      }
+    }
+    if (isRecord(raw.abilities)) {
+      for (const [key2, value] of Object.entries(raw.abilities)) {
+        if (typeof key2 !== "string" || !isRecord(value)) continue;
+        base.abilities[key2] = {
+          triggers: toPositiveInt(value.triggers, base.abilities[key2]?.triggers ?? 0),
+          totalValue: toPositiveNumber(value.totalValue, base.abilities[key2]?.totalValue ?? 0)
+        };
+      }
+    }
+    if (isRecord(raw.weather)) {
+      for (const [key2, value] of Object.entries(raw.weather)) {
+        if (typeof key2 !== "string" || !isRecord(value)) continue;
+        const normalizedKey = key2.toLowerCase();
+        const fallback = base.weather[normalizedKey] ?? { triggers: 0 };
+        base.weather[normalizedKey] = {
+          triggers: toPositiveInt(value.triggers, fallback.triggers)
+        };
+      }
+    }
+    return base;
+  }
+  function readFromStorage() {
+    const storage = getStorage();
+    if (!storage) {
+      if (!memoryStore) memoryStore = createDefaultStats();
+      return cloneStats(memoryStore);
+    }
+    try {
+      const raw = storage.getItem(LS_STATS_KEY);
+      if (!raw) {
+        const fresh = createDefaultStats();
+        memoryStore = cloneStats(fresh);
+        return fresh;
+      }
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeStats(parsed);
+      memoryStore = cloneStats(normalized);
+      return normalized;
+    } catch {
+      const fresh = createDefaultStats();
+      memoryStore = cloneStats(fresh);
+      return fresh;
+    }
+  }
+  function emitUpdate(stats) {
+    const snapshot = cloneStats(stats);
+    for (const listener of listeners) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        console.error("[StatsService] Listener error", error);
+      }
+    }
+  }
+  function writeToStorage(stats) {
+    const snapshot = cloneStats(stats);
+    const storage = getStorage();
+    memoryStore = snapshot;
+    if (storage) {
+      try {
+        storage.setItem(LS_STATS_KEY, JSON.stringify(snapshot));
+      } catch {
+      }
+    }
+    return snapshot;
+  }
+  function adjustValue(current, delta, integer) {
+    const a = Number(current);
+    const b = Number(delta);
+    const sum = Number.isFinite(a) ? a : 0;
+    const next = sum + (Number.isFinite(b) ? b : 0);
+    const clamped = Math.max(0, next);
+    return integer ? Math.floor(clamped) : clamped;
+  }
+  function updateStats(mutator) {
+    const stats = readFromStorage();
+    const draft = cloneStats(stats);
+    mutator(draft);
+    const stored = writeToStorage(draft);
+    emitUpdate(stored);
+    return stored;
+  }
+  function requireAbilityEntry(stats, abilityId) {
+    if (!stats.abilities[abilityId]) {
+      stats.abilities[abilityId] = { triggers: 0, totalValue: 0 };
+    }
+    return stats.abilities[abilityId];
+  }
+  function requireWeatherEntry(stats, weatherId) {
+    const key2 = weatherId.toLowerCase();
+    if (!stats.weather[key2]) {
+      stats.weather[key2] = { triggers: 0 };
+    }
+    return stats.weather[key2];
+  }
+  function requirePetEntry(stats, species) {
+    const key2 = species.toLowerCase();
+    if (!stats.pets.hatchedByType[key2]) {
+      stats.pets.hatchedByType[key2] = { normal: 0, gold: 0, rainbow: 0 };
+    }
+    return stats.pets.hatchedByType[key2];
+  }
+  var StatsService = {
+    storageKey: LS_STATS_KEY,
+    getSnapshot() {
+      return readFromStorage();
+    },
+    setSnapshot(snapshot) {
+      const normalized = normalizeStats(snapshot);
+      const stored = writeToStorage(normalized);
+      emitUpdate(stored);
+      return stored;
+    },
+    reset() {
+      const fresh = createDefaultStats();
+      const stored = writeToStorage(fresh);
+      emitUpdate(stored);
+      return stored;
+    },
+    update(mutator) {
+      return updateStats(mutator);
+    },
+    incrementGardenStat(key2, amount = 1) {
+      return updateStats((draft) => {
+        draft.garden[key2] = adjustValue(draft.garden[key2], amount, GARDEN_INT_KEYS[key2]);
+      });
+    },
+    incrementShopStat(key2, amount = 1) {
+      return updateStats((draft) => {
+        draft.shops[key2] = adjustValue(draft.shops[key2], amount, SHOP_INT_KEYS[key2]);
+      });
+    },
+    incrementPetHatched(species, rarityKey = "normal", amount = 1) {
+      return updateStats((draft) => {
+        const entry = requirePetEntry(draft, species);
+        entry[rarityKey] = adjustValue(entry[rarityKey], amount, true);
+      });
+    },
+    incrementAbilityStat(abilityId, key2, amount = 1) {
+      return updateStats((draft) => {
+        const entry = requireAbilityEntry(draft, abilityId);
+        entry[key2] = adjustValue(entry[key2], amount, ABILITY_INT_KEYS[key2]);
+      });
+    },
+    incrementWeatherStat(weatherId, key2 = "triggers", amount = 1) {
+      return updateStats((draft) => {
+        const entry = requireWeatherEntry(draft, weatherId);
+        entry[key2] = adjustValue(entry[key2], amount, WEATHER_INT_KEYS[key2]);
+      });
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }
+  };
+  var StatsDefaults = {
+    rarityOrder: [
+      rarity.Common,
+      rarity.Uncommon,
+      rarity.Rare,
+      rarity.Legendary,
+      rarity.Mythic,
+      rarity.Divine,
+      rarity.Celestial
+    ],
+    createEmpty() {
+      return createDefaultStats();
+    }
+  };
+
+  // src/hooks/ws-hook.ts
+  function installPageWebSocketHook() {
+    if (!pageWindow || !NativeWS) return;
+    function WrappedWebSocket(url, protocols) {
+      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
+      sockets.push(ws);
+      ws.addEventListener("open", () => {
+        setTimeout(() => {
+          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
+        }, 800);
+      });
+      ws.addEventListener("message", async (ev) => {
+        const j = await parseWSData(ev.data);
+        if (!j) return;
+        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
+          setQWS(ws, "message:" + (j.type || "state"));
+        }
+      });
+      return ws;
+    }
+    WrappedWebSocket.prototype = NativeWS.prototype;
+    try {
+      WrappedWebSocket.OPEN = NativeWS.OPEN;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
+    } catch {
+    }
+    pageWindow.WebSocket = WrappedWebSocket;
+    if (pageWindow !== window) {
+      try {
+        window.WebSocket = WrappedWebSocket;
+      } catch {
+      }
+    }
+    function hasSharedQuinoaWS() {
+      const existing = readSharedGlobal("quinoaWS");
+      return !!existing;
+    }
+    installHarvestCropInterceptor();
+  }
+  var interceptorsByType = /* @__PURE__ */ new Map();
+  var interceptorStatus = readSharedGlobal(
+    "__tmMessageHookInstalled"
+  ) ? "installed" : "idle";
+  var interceptorPoll = null;
+  var interceptorTimeout = null;
+  function registerMessageInterceptor(type, interceptor) {
+    const list = interceptorsByType.get(type);
+    if (list) {
+      list.push(interceptor);
+    } else {
+      interceptorsByType.set(type, [interceptor]);
+    }
+    ensureMessageInterceptorInstalled();
+    return () => {
+      const current = interceptorsByType.get(type);
+      if (!current) return;
+      const index = current.indexOf(interceptor);
+      if (index !== -1) current.splice(index, 1);
+      if (current.length === 0) interceptorsByType.delete(type);
+    };
+  }
+  function ensureMessageInterceptorInstalled() {
+    if (interceptorStatus === "installed" || interceptorStatus === "installing") return;
+    interceptorStatus = "installing";
+    const tryInstall = () => {
+      const Conn = pageWindow.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
+      if (!Conn) return false;
+      const original = resolveSendMessage(Conn);
+      if (!original) return false;
+      const wrap = function(message, ...rest) {
+        let currentMessage = message;
+        try {
+          const type = currentMessage?.type;
+          if (type && interceptorsByType.size > 0) {
+            const context = { thisArg: this, args: rest };
+            const result = applyInterceptors(type, currentMessage, context);
+            if (result.drop) return;
+            currentMessage = result.message;
+          }
+        } catch (error) {
+          console.error("[MG-mod] Erreur dans le hook WS :", error);
+        }
+        return original.fn.call(this, currentMessage, ...rest);
+      };
+      if (original.kind === "static") {
+        Conn.sendMessage = wrap;
+      } else {
+        Conn.prototype.sendMessage = wrap;
+      }
+      interceptorStatus = "installed";
+      shareGlobal("__tmMessageHookInstalled", true);
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorTimeout !== null) {
+        clearTimeout(interceptorTimeout);
+        interceptorTimeout = null;
+      }
+      return true;
+    };
+    if (tryInstall()) return;
+    interceptorPoll = window.setInterval(() => {
+      if (tryInstall()) {
+        if (interceptorPoll !== null) {
+          clearInterval(interceptorPoll);
+          interceptorPoll = null;
+        }
+      }
+    }, 200);
+    interceptorTimeout = window.setTimeout(() => {
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorStatus !== "installed") {
+        interceptorStatus = "idle";
+      }
+      interceptorTimeout = null;
+    }, 2e4);
+  }
+  function applyInterceptors(type, initialMessage, context) {
+    const interceptors = interceptorsByType.get(type);
+    if (!interceptors || interceptors.length === 0) {
+      return { message: initialMessage, drop: false };
+    }
+    let currentMessage = initialMessage;
+    for (const interceptor of [...interceptors]) {
+      try {
+        const result = interceptor(currentMessage, context);
+        if (!result) continue;
+        if (result.kind === "drop") {
+          return { message: currentMessage, drop: true };
+        }
+        if (result.kind === "replace") {
+          currentMessage = result.message;
+        }
+      } catch (error) {
+      }
+    }
+    return { message: currentMessage, drop: false };
+  }
+  function installHarvestCropInterceptor() {
+    if (readSharedGlobal("__tmHarvestHookInstalled")) return;
+    let latestGardenState = null;
+    let latestCropItemsToSell = null;
+    let autoFavInstalled = false;
+    void (async () => {
+      try {
+        latestGardenState = await Atoms.data.garden.get() ?? null;
+      } catch {
+      }
+      try {
+        await Atoms.data.garden.onChange((next) => {
+          latestGardenState = next ?? null;
+        });
+      } catch {
+      }
+      try {
+        latestCropItemsToSell = await Atoms.inventory.myCropItemsToSell.get();
+      } catch {
+      }
+      try {
+        await Atoms.inventory.myCropItemsToSell.onChange((next) => {
+          latestCropItemsToSell = Array.isArray(next) ? next.slice() : null;
+        });
+      } catch {
+      }
+    })();
+    registerMessageInterceptor("HarvestCrop", (message) => {
+      const slot = message.slot;
+      const slotsIndex = message.slotsIndex;
+      if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
+        return;
+      }
+      const garden2 = latestGardenState;
+      const tileObjects = garden2?.tileObjects;
+      const tile = tileObjects ? tileObjects[String(slot)] : void 0;
+      if (!tile || typeof tile !== "object" || tile.objectType !== "plant") {
+        return;
+      }
+      const slots = Array.isArray(tile.slots) ? tile.slots : [];
+      const cropSlot = slots[slotsIndex];
+      if (!cropSlot || typeof cropSlot !== "object") {
+        return;
+      }
+      const seedKey = extractSeedKey2(tile);
+      const sizePercent = extractSizePercent2(cropSlot);
+      const mutations = sanitizeMutations(cropSlot?.mutations);
+      const lockerEnabled = (() => {
+        try {
+          return lockerService.getState().enabled;
+        } catch {
+          return false;
+        }
+      })();
+      if (lockerEnabled) {
+        let harvestAllowed = true;
+        try {
+          harvestAllowed = lockerService.allowsHarvest({
+            seedKey,
+            sizePercent,
+            mutations
+          });
+        } catch {
+          harvestAllowed = true;
+        }
+        if (!harvestAllowed) {
+          console.log("[HarvestCrop] Blocked by locker", {
+            slot,
+            slotsIndex,
+            seedKey,
+            sizePercent,
+            mutations
+          });
+          return { kind: "drop" };
+        }
+      }
+      StatsService.incrementGardenStat("totalHarvested");
+      void (async () => {
+        try {
+          const garden3 = await Atoms.data.garden.get();
+          const tileObjects2 = garden3?.tileObjects ?? null;
+          const tile2 = tileObjects2 ? tileObjects2[String(slot)] : void 0;
+          const cropSlot2 = Array.isArray(tile2?.slots) ? tile2.slots?.[slotsIndex] : void 0;
+          console.log("[HarvestCrop]", {
+            slot,
+            slotsIndex,
+            cropSlot: cropSlot2
+          });
+        } catch (error) {
+          console.error("[HarvestCrop] Unable to log crop slot", error);
+        }
+      })();
+    });
+    registerMessageInterceptor("RemoveGardenObject", (message) => {
+      StatsService.incrementGardenStat("totalDestroyed");
+    });
+    registerMessageInterceptor("WaterPlant", (message) => {
+      StatsService.incrementGardenStat("watercanUsed");
+      StatsService.incrementGardenStat("waterTimeSavedMs", 5 * 60 * 1e3);
+    });
+    registerMessageInterceptor("PlantSeed", (message) => {
+      StatsService.incrementGardenStat("totalPlanted");
+    });
+    registerMessageInterceptor("PurchaseDecor", (message) => {
+      StatsService.incrementShopStat("decorBought");
+    });
+    registerMessageInterceptor("PurchaseSeed", (message) => {
+      StatsService.incrementShopStat("seedsBought");
+    });
+    registerMessageInterceptor("PurchaseEgg", (message) => {
+      StatsService.incrementShopStat("eggsBought");
+    });
+    registerMessageInterceptor("PurchaseTool", (message) => {
+      StatsService.incrementShopStat("toolsBought");
+    });
+    registerMessageInterceptor("HatchEgg", () => {
+      void (async () => {
+        const previousPets = await readInventoryPetSnapshots();
+        const previousMap = buildPetMap(previousPets);
+        const nextPets = await waitForInventoryPetAddition(previousMap);
+        if (!nextPets) return;
+        const newPets = extractNewPets(nextPets, previousMap);
+        if (!newPets.length) return;
+        for (const pet of newPets) {
+          const rarity2 = inferPetRarity(pet.mutations);
+          if (pet.species) {
+            StatsService.incrementPetHatched(pet.species, rarity2);
+          }
+        }
+      })();
+    });
+    registerMessageInterceptor("SellAllCrops", (message) => {
+      const ALLOW_FLAG_KEY = "__tmAllowNextSellAllCrops";
+      const allowNext = !!readSharedGlobal(ALLOW_FLAG_KEY);
+      if (allowNext) {
+        shareGlobal(ALLOW_FLAG_KEY, false);
+      } else {
+        try {
+          if (MiscService.readBlockSellCrops?.(false)) {
+            console.log("[SellAllCrops] Blocked by setting");
+            void toastSimple("Selling crops blocked", "Disable block in Misc to sell.", "warn");
+            return { kind: "drop" };
+          }
+        } catch {
+        }
+        (async () => {
+          try {
+            const inv = await PlayerService.getCropInventoryState?.();
+            const items = Array.isArray(inv) ? inv : [];
+            const favSet = await PlayerService.getFavoriteIdSet?.().catch(() => /* @__PURE__ */ new Set());
+            const protectedSet = (() => {
+              try {
+                return MiscService.readPetFoodSpeciesSet?.() ?? /* @__PURE__ */ new Set();
+              } catch {
+                return /* @__PURE__ */ new Set();
+              }
+            })();
+            const protectedIds = [];
+            for (const it of items) {
+              const sp = String(it?.species ?? "");
+              const norm3 = sp.toLowerCase().replace(/[\'’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+              if (protectedSet.has(norm3) && typeof it?.id === "string" && it.id) {
+                protectedIds.push(it.id);
+              }
+            }
+            const toFavorite = protectedIds.filter((id) => !favSet.has(id));
+            if (toFavorite.length > 0) {
+              await PlayerService.ensureFavorites(toFavorite, true);
+            }
+            shareGlobal(ALLOW_FLAG_KEY, true);
+            try {
+              await PlayerService.sellAllCrops();
+            } catch {
+            }
+            try {
+              await new Promise(async (resolve2) => {
+                let offUnsub;
+                try {
+                  const reg = PlayerService.onCropInventoryDiff?.((inv2, diff) => {
+                    try {
+                      offUnsub?.();
+                    } catch {
+                    }
+                    resolve2();
+                  });
+                  if (typeof reg === "function") offUnsub = reg;
+                  else if (reg && typeof reg.then === "function") offUnsub = await reg;
+                } catch {
+                  resolve2();
+                }
+              });
+            } catch {
+            }
+            try {
+              if (toFavorite.length > 0) {
+                await PlayerService.ensureFavorites(toFavorite, false);
+              }
+            } catch {
+            }
+          } catch (error) {
+            console.error("[SellAllCrops] Orchestration error", error);
+          }
+        })();
+        return { kind: "drop" };
+      }
+      try {
+        if (MiscService.readBlockSellCrops?.(false)) {
+          console.log("[SellAllCrops] Blocked by setting");
+          void toastSimple("Selling crops blocked", "Disable block in Misc to sell.", "warn");
+          return { kind: "drop" };
+        }
+      } catch {
+      }
+      void (async () => {
+        try {
+          const items = await Atoms.inventory.myCropItemsToSell.get();
+          const count = Array.isArray(items) ? items.length : 0;
+          if (count > 0) {
+            StatsService.incrementShopStat("cropsSoldCount", count);
+          }
+        } catch (error) {
+          console.error("[SellAllCrops] Unable to read crop items", error);
+        }
+        try {
+          const total = await Atoms.shop.totalCropSellPrice.get();
+          const value = Number(total);
+          if (Number.isFinite(value) && value > 0) {
+            StatsService.incrementShopStat("cropsSoldValue", value);
+          }
+        } catch (error) {
+          console.error("[SellAllCrops] Unable to read crop sell price", error);
+        }
+      })();
+    });
+    registerMessageInterceptor("SellPet", (message) => {
+      StatsService.incrementShopStat("petsSoldCount");
+      void (async () => {
+        try {
+          const total = await Atoms.pets.totalPetSellPrice.get();
+          const value = Number(total);
+          if (Number.isFinite(value) && value > 0) {
+            StatsService.incrementShopStat("petsSoldValue", value);
+          }
+        } catch (error) {
+          console.error("[SellPet] Unable to read pet sell price", error);
+        }
+      })();
+    });
+    if (!autoFavInstalled) {
+      try {
+        const off = PlayerService.onCropInventoryDiff?.(async (inv, diff) => {
+          try {
+            const enabled = MiscService.readPetFoodToggle?.(false);
+            if (!enabled) return;
+            const addedIds = Array.isArray(diff?.added) ? diff.added : [];
+            if (!addedIds.length) return;
+            const items = Array.isArray(inv) ? inv : [];
+            const byId = /* @__PURE__ */ new Map();
+            for (const it of items) {
+              const id = String(it?.id ?? "");
+              if (id) byId.set(id, it);
+            }
+            const toFav = [];
+            const protectedSet = (() => {
+              try {
+                return MiscService.readPetFoodSpeciesSet?.() ?? /* @__PURE__ */ new Set();
+              } catch {
+                return /* @__PURE__ */ new Set();
+              }
+            })();
+            for (const id of addedIds) {
+              const it = byId.get(String(id));
+              if (!it) continue;
+              const sp = String(it?.species ?? "");
+              const norm3 = sp.toLowerCase().replace(/[\'’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+              if (protectedSet.has(norm3)) {
+                toFav.push(String(id));
+              }
+            }
+            if (toFav.length) {
+              await PlayerService.ensureFavorites?.(toFav, true);
+            }
+          } catch {
+          }
+        });
+        autoFavInstalled = true;
+      } catch {
+      }
+    }
+    shareGlobal("__tmHarvestHookInstalled", true);
+  }
+  function extractSeedKey2(tile) {
+    if (!tile || typeof tile !== "object") return null;
+    if (typeof tile.seedKey === "string" && tile.seedKey) return tile.seedKey;
+    if (typeof tile.species === "string" && tile.species) return tile.species;
+    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
+    for (const key2 of fallbacks) {
+      const value = tile[key2];
+      if (typeof value === "string" && value) return value;
+    }
+    return null;
+  }
+  var normalizeSpeciesKey3 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var MAX_SCALE_BY_SPECIES2 = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, value) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey3(key2.trim());
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, value);
+    };
+    for (const [species, entry] of Object.entries(plantCatalog)) {
+      const maxScale = Number(entry?.crop?.maxScale);
+      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+      register(species, maxScale);
+      register(entry?.seed?.name, maxScale);
+      register(entry?.plant?.name, maxScale);
+      register(entry?.crop?.name, maxScale);
+    }
+    return map2;
+  })();
+  function lookupMaxScale2(species) {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey3(species.trim());
+    if (!normalized) return null;
+    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
+    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
+      return found;
+    }
+    return null;
+  }
+  function getMaxScaleForSlot2(slot) {
+    if (!slot || typeof slot !== "object") return null;
+    const candidates = /* @__PURE__ */ new Set();
+    const fromSeedKey = extractSeedKey2(slot);
+    if (fromSeedKey) candidates.add(fromSeedKey);
+    const fields = [
+      "species",
+      "seedSpecies",
+      "plantSpecies",
+      "cropSpecies",
+      "baseSpecies",
+      "seedKey"
+    ];
+    for (const field of fields) {
+      const value = slot[field];
+      if (typeof value === "string" && value) {
+        candidates.add(value);
+      }
+    }
+    for (const cand of candidates) {
+      const max = lookupMaxScale2(cand);
+      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+        return max;
+      }
+    }
+    return null;
+  }
+  function extractSizePercent2(slot) {
+    if (!slot || typeof slot !== "object") return 100;
+    const direct = Number(
+      slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
+    );
+    if (Number.isFinite(direct)) {
+      return clampPercent2(Math.round(direct), 0, 100);
+    }
+    const scale = Number(slot.targetScale ?? slot.scale);
+    if (Number.isFinite(scale)) {
+      const maxScale = getMaxScaleForSlot2(slot);
+      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
+        const clamped = Math.max(1, Math.min(maxScale, scale));
+        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
+        return clampPercent2(Math.round(pct2), 50, 100);
+      }
+      if (scale > 1 && scale <= 2) {
+        const pct2 = 50 + (scale - 1) / 1 * 50;
+        return clampPercent2(Math.round(pct2), 50, 100);
+      }
+      const pct = Math.round(scale * 100);
+      return clampPercent2(pct, 0, 100);
+    }
+    return 100;
+  }
+  function sanitizeMutations(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const value = raw[i];
+      if (typeof value === "string") {
+        if (value) out.push(value);
+      } else if (value != null) {
+        const str = String(value);
+        if (str) out.push(str);
+      }
+    }
+    return out;
+  }
+  function clampPercent2(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+  var HATCH_EGG_TIMEOUT_MS = 5e3;
+  async function readInventoryPetSnapshots() {
+    try {
+      const inventory = await Atoms.inventory.myInventory.get();
+      return collectInventoryPets(inventory);
+    } catch (error) {
+      console.error("[HatchEgg] Unable to read inventory", error);
+      return [];
+    }
+  }
+  function collectInventoryPets(rawInventory) {
+    const items = extractInventoryItems(rawInventory);
+    const pets = [];
+    for (const entry of items) {
+      const pet = toInventoryPet(entry);
+      if (pet) pets.push(pet);
+    }
+    return pets;
+  }
+  function extractInventoryItems(rawInventory) {
+    if (!rawInventory) return [];
+    if (Array.isArray(rawInventory)) return rawInventory;
+    if (Array.isArray(rawInventory.items)) return rawInventory.items;
+    if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
+    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
+    return [];
+  }
+  function toInventoryPet(entry) {
+    if (!entry || typeof entry !== "object") return null;
+    const source = entry.item && typeof entry.item === "object" ? entry.item : entry;
+    if (!source || typeof source !== "object") return null;
+    const type = source.itemType ?? source.data?.itemType ?? "";
+    if (String(type).toLowerCase() !== "pet") return null;
+    const id = source.id ?? source.data?.id;
+    const species = source.petSpecies ?? source.data?.petSpecies;
+    if (!id || !species) return null;
+    const mutations = sanitizeMutations(source.mutations ?? source.data?.mutations);
+    return {
+      id: String(id),
+      species: String(species),
+      mutations
+    };
+  }
+  function buildPetMap(pets) {
+    const map2 = /* @__PURE__ */ new Map();
+    for (const pet of pets) {
+      map2.set(pet.id, pet);
+    }
+    return map2;
+  }
+  function extractNewPets(pets, previous) {
+    return pets.filter((pet) => !previous.has(pet.id));
+  }
+  function inferPetRarity(mutations) {
+    if (!Array.isArray(mutations) || mutations.length === 0) {
+      return "normal";
+    }
+    const seen = new Set(mutations.map((m) => String(m).toLowerCase()));
+    if (seen.has("rainbow")) return "rainbow";
+    if (seen.has("gold") || seen.has("golden")) return "gold";
+    return "normal";
+  }
+  async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
+    await delay(0);
+    const initial = await readInventoryPetSnapshots();
+    if (hasNewInventoryPet(initial, previous)) {
+      return initial;
+    }
+    return new Promise(async (resolve2) => {
+      let settled = false;
+      let unsub = null;
+      let timer = null;
+      const finalize = (value) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+        if (unsub) {
+          try {
+            unsub();
+          } catch {
+          }
+        }
+        resolve2(value);
+      };
+      const evaluate = (source) => {
+        const pets = collectInventoryPets(source);
+        if (hasNewInventoryPet(pets, previous)) {
+          finalize(pets);
+        }
+      };
+      try {
+        unsub = await Atoms.inventory.myInventory.onChange((next) => {
+          evaluate(next);
+        });
+      } catch (error) {
+        console.error("[HatchEgg] Unable to observe inventory", error);
+        finalize(null);
+        return;
+      }
+      timer = setTimeout(() => {
+        void (async () => {
+          const latest = await readInventoryPetSnapshots();
+          if (hasNewInventoryPet(latest, previous)) {
+            finalize(latest);
+          } else {
+            finalize(null);
+          }
+        })();
+      }, timeoutMs);
+    });
+  }
+  function hasNewInventoryPet(pets, previous) {
+    return pets.some((pet) => !previous.has(pet.id));
+  }
+  function delay(ms) {
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
+  }
+  function resolveSendMessage(Conn) {
+    const isFn = (value) => typeof value === "function";
+    if (isFn(Conn.sendMessage)) {
+      return { kind: "static", fn: Conn.sendMessage.bind(Conn) };
+    }
+    if (Conn.prototype && isFn(Conn.prototype.sendMessage)) {
+      return { kind: "proto", fn: Conn.prototype.sendMessage };
+    }
+    return null;
   }
 
   // src/ui/menu.ts
@@ -10227,7 +11172,7 @@
         {
           id: "gui.toggle",
           label: "\u{1F441}\uFE0F Toggle menu visibility",
-          hint: "Opens or closes the Arie's Mod overlay.",
+          hint: "Opens or closes the Belial's Mod overlay.",
           defaultHotkey: { alt: true, code: "KeyX" }
         },
         {
@@ -12409,28 +13354,6 @@
     );
   }
 
-  // src/ui/toast.ts
-  async function sendToast(toast) {
-    const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
-    if (sendAtom) {
-      await jSet(sendAtom, toast);
-      return;
-    }
-    const listAtom = getAtomByLabel("quinoaToastsAtom");
-    if (!listAtom) throw new Error("Aucun atom de toast trouv\xE9");
-    const prev = await jGet(listAtom).catch(() => []);
-    const t = { isClosable: true, duration: 1e4, ...toast };
-    if ("toastType" in t && t.toastType === "board") {
-      t.id = t.id ?? (t.isStackable ? `quinoa-stackable-${Date.now()}-${Math.random()}` : "quinoa-game-toast");
-    } else {
-      t.id = t.id ?? "quinoa-game-toast";
-    }
-    await jSet(listAtom, [...prev, t]);
-  }
-  async function toastSimple(title, description, variant = "info", duration = 3500) {
-    await sendToast({ title, description, variant, duration });
-  }
-
   // src/core/audioPlayer.ts
   var AudioPlayer = class {
     constructor(opts = {}) {
@@ -13294,7 +14217,16 @@
         if (eventMatchesKeybind("sell.sell-all", event)) {
           event.preventDefault();
           event.stopPropagation();
-          void PlayerService.sellAllCrops();
+          void (async () => {
+            try {
+              if (MiscService.readBlockSellCrops?.(false)) {
+                void toastSimple("Selling crops blocked", "Disable block in Misc to sell.", "warn");
+                return;
+              }
+            } catch {
+            }
+            void PlayerService.sellAllCrops();
+          })();
           return;
         }
         if (eventMatchesKeybind("sell.sell-all-pets", event)) {
@@ -17546,7 +18478,7 @@ try{importScripts("${abs}")}catch(e){}
     style2.textContent = css;
     document.head.appendChild(style2);
   }
-  function createButton(templateBtn) {
+  function createButton2(templateBtn) {
     const btn = document.createElement("button");
     btn.type = "button";
     if (templateBtn?.className) {
@@ -17636,7 +18568,7 @@ try{importScripts("${abs}")}catch(e){}
     if (btns.length < 2) return;
     let middle = row.querySelector(`button.${BTN_CLASS}`);
     if (!middle) {
-      middle = createButton(btns[0]);
+      middle = createButton2(btns[0]);
       row.insertBefore(middle, btns[1]);
     }
     const disabled = isItemDisabled(itemEl);
@@ -18662,7 +19594,7 @@ try{importScripts("${abs}")}catch(e){}
   }
 
   // src/utils/version.ts
-  var REPO_OWNER = "Ariedam64";
+  var REPO_OWNER = "xVCantCode";
   var REPO_NAME = "MagicGarden-modMenu";
   var REPO_BRANCH = "main";
   var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
@@ -18723,21 +19655,20 @@ try{importScripts("${abs}")}catch(e){}
   async function fetchScriptSource() {
     const commitSha = await fetchLatestCommitSha();
     const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
-    return await fetchText(scriptUrl);
+    const text = await fetchText(scriptUrl);
+    return { text, url: scriptUrl };
   }
   async function fetchRemoteVersion() {
     try {
-      const scriptSource = await fetchScriptSource();
+      const { text: scriptSource, url: scriptUrl } = await fetchScriptSource();
       const meta = extractUserscriptMetadata(scriptSource);
       if (!meta) {
         throw new Error("Metadata block not found in remote script");
       }
       const version = meta.get("version")?.[0];
-      const download = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
-      return {
-        version,
-        download
-      };
+      const metaDownload = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
+      const download = scriptUrl || metaDownload || void 0;
+      return { version, download };
     } catch (error) {
       console.error("Unable to retrieve remote version:", error);
       return null;
@@ -20309,12 +21240,12 @@ try{importScripts("${abs}")}catch(e){}
     "baseSpecies",
     "seedKey"
   ];
-  var normalizeSpeciesKey3 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var normalizeSpeciesKey4 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
   var MAX_SCALE_BY_SPECIES3 = (() => {
     const map2 = /* @__PURE__ */ new Map();
     const register = (key2, value) => {
       if (typeof key2 !== "string") return;
-      const normalized = normalizeSpeciesKey3(key2.trim());
+      const normalized = normalizeSpeciesKey4(key2.trim());
       if (!normalized || map2.has(normalized)) return;
       map2.set(normalized, value);
     };
@@ -20330,7 +21261,7 @@ try{importScripts("${abs}")}catch(e){}
   })();
   var lookupMaxScale3 = (species) => {
     if (typeof species !== "string") return null;
-    const normalized = normalizeSpeciesKey3(species.trim());
+    const normalized = normalizeSpeciesKey4(species.trim());
     if (!normalized) return null;
     const value = MAX_SCALE_BY_SPECIES3.get(normalized);
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
@@ -20987,7 +21918,7 @@ try{importScripts("${abs}")}catch(e){}
     const map2 = /* @__PURE__ */ new Map();
     const register = (key2, maxScale, hoursToMature) => {
       if (typeof key2 !== "string") return;
-      const normalized = normalizeSpeciesKey3(key2);
+      const normalized = normalizeSpeciesKey4(key2);
       if (!normalized || map2.has(normalized)) return;
       map2.set(normalized, { maxScale, hoursToMature });
     };
@@ -21003,7 +21934,7 @@ try{importScripts("${abs}")}catch(e){}
   })();
   var lookupPetStats = (species) => {
     if (typeof species !== "string") return null;
-    const normalized = normalizeSpeciesKey3(species);
+    const normalized = normalizeSpeciesKey4(species);
     if (!normalized) return null;
     return PET_STATS_BY_SPECIES.get(normalized) ?? null;
   };
@@ -22344,7 +23275,7 @@ try{importScripts("${abs}")}catch(e){}
     box.className = "qws2";
     box.innerHTML = `
     <div class="row drag">
-      <div class="title">\u{1F383} Arie's Mod</div>
+      <div class="title">\u{1F383} Belial's Mod</div>
       <div class="sp"></div>
       <span id="qws2-status-mini" class="pill warn mini">\u2026</span>
       <button id="qws2-min" class="btn" title="Minimize/Expand">\u2013</button>
@@ -31240,7 +32171,7 @@ next: ${next}`;
     card.style.minHeight = "0";
     wrap.appendChild(card);
     const headerGrid = document.createElement("div");
-    const COLS = "minmax(200px, 1fr) 9rem 7rem 8rem";
+    const COLS = "minmax(200px, 1fr) 9rem 7rem 7rem 8rem";
     headerGrid.style.display = "grid";
     headerGrid.style.gridTemplateColumns = COLS;
     headerGrid.style.justifyContent = "start";
@@ -31253,9 +32184,14 @@ next: ${next}`;
       mkHeadCell("Item", "left"),
       mkHeadCell("Rarity"),
       mkHeadCell("Notify"),
+      mkHeadCell("Pet-Food"),
       mkHeadCell("Custom rules")
     );
     card.appendChild(headerGrid);
+    const afterColon = (s) => {
+      const i = s.indexOf(":");
+      return i >= 0 ? s.slice(i + 1) : s;
+    };
     const bodyGrid = document.createElement("div");
     bodyGrid.style.display = "grid";
     bodyGrid.style.gridTemplateColumns = COLS;
@@ -31338,12 +32274,12 @@ next: ${next}`;
         marginRight: "6px",
         aspectRatio: "1 / 1"
       });
-      const afterColon = (s) => {
+      const afterColon2 = (s) => {
         const i = s.indexOf(":");
         return i >= 0 ? s.slice(i + 1) : s;
       };
       const spriteFallback = row.type === "Seed" ? "\u{1F331}" : row.type === "Egg" ? "\u{1F95A}" : row.type === "Tool" ? "\u{1F9F0}" : "\u{1F3E0}";
-      const spriteKey2 = afterColon(row.id);
+      const spriteKey2 = afterColon2(row.id);
       const sprite = createShopSprite(row.type, spriteKey2, {
         size: ICON - 6,
         fallback: spriteFallback,
@@ -31429,9 +32365,23 @@ next: ${next}`;
           context: "shops"
         }, gearBtn);
       });
+      const petFoodSwitch = createSwitch((on) => {
+        try {
+          const speciesKey = String(row.name || afterColon(row.id));
+          MiscService.writePetFoodForSpecies?.(speciesKey, !!on);
+        } catch {
+        }
+      });
+      try {
+        const speciesKey = String(row.name || afterColon(row.id));
+        setSwitchVisual(petFoodSwitch, !!MiscService.readPetFoodForSpecies?.(speciesKey));
+      } catch {
+      }
+      petFoodSwitch.style.padding = "0";
+      const petFoodCell = wrapCell(petFoodSwitch);
       const ruleCell = wrapCell(gearBtn);
       ruleCell.dataset.role = "rule-cell";
-      bodyGrid.append(itemCell, rarityCell, popupCell, ruleCell);
+      bodyGrid.append(itemCell, rarityCell, popupCell, petFoodCell, ruleCell);
       applyRuleState(itemCell, ruleCell, NotifierService.getRule(row.id));
     };
     function clearBody() {
@@ -34331,726 +35281,6 @@ next: ${next}`;
     ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab(view, ui));
   }
 
-  // src/services/misc.ts
-  var LS_GHOST_KEY = "qws:player:ghostMode";
-  var LS_DELAY_KEY = "qws:ghost:delayMs";
-  var DEFAULT_DELAY_MS = 50;
-  var readGhostEnabled = (def = false) => {
-    try {
-      return localStorage.getItem(LS_GHOST_KEY) === "1";
-    } catch {
-      return def;
-    }
-  };
-  var writeGhostEnabled = (v) => {
-    try {
-      localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
-    } catch (err) {
-    }
-  };
-  var getGhostDelayMs = () => {
-    try {
-      const n = Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS);
-      return Math.max(5, n);
-    } catch {
-      return DEFAULT_DELAY_MS;
-    }
-  };
-  var setGhostDelayMs = (n) => {
-    const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
-    try {
-      localStorage.setItem(LS_DELAY_KEY, String(v));
-    } catch (err) {
-    }
-  };
-  function createGhostController() {
-    let DELAY_MS = getGhostDelayMs();
-    const KEYS = /* @__PURE__ */ new Set();
-    const onKeyDownCapture = (e) => {
-      const k = e.key.toLowerCase();
-      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
-      if (!isMove) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (e.repeat) return;
-      KEYS.add(k);
-    };
-    const onKeyUpCapture = (e) => {
-      const k = e.key.toLowerCase();
-      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
-      if (!isMove) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      KEYS.delete(k);
-    };
-    const onBlur = () => {
-      KEYS.clear();
-    };
-    const onVisibility = () => {
-      if (document.hidden) KEYS.clear();
-    };
-    function getDir() {
-      let dx = 0, dy = 0;
-      if (KEYS.has("z") || KEYS.has("w") || KEYS.has("arrowup")) dy -= 1;
-      if (KEYS.has("s") || KEYS.has("arrowdown")) dy += 1;
-      if (KEYS.has("q") || KEYS.has("a") || KEYS.has("arrowleft")) dx -= 1;
-      if (KEYS.has("d") || KEYS.has("arrowright")) dx += 1;
-      if (dx) dx = dx > 0 ? 1 : -1;
-      if (dy) dy = dy > 0 ? 1 : -1;
-      return { dx, dy };
-    }
-    let rafId = null;
-    let lastTs = 0, accMs = 0, inMove = false;
-    async function step(dx, dy) {
-      let cur;
-      try {
-        cur = await PlayerService.getPosition();
-      } catch (err) {
-      }
-      const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
-      try {
-        await PlayerService.move(cx + dx, cy + dy);
-      } catch (err) {
-      }
-    }
-    const CAPTURE = { capture: true };
-    function frame(ts) {
-      if (!lastTs) lastTs = ts;
-      const dt = ts - lastTs;
-      lastTs = ts;
-      const { dx, dy } = getDir();
-      accMs += dt;
-      if (dx === 0 && dy === 0) {
-        accMs = Math.min(accMs, DELAY_MS * 4);
-        rafId = requestAnimationFrame(frame);
-        return;
-      }
-      if (accMs >= DELAY_MS && !inMove) {
-        accMs -= DELAY_MS;
-        inMove = true;
-        (async () => {
-          try {
-            await step(dx, dy);
-          } finally {
-            inMove = false;
-          }
-        })();
-      }
-      accMs = Math.min(accMs, DELAY_MS * 4);
-      rafId = requestAnimationFrame(frame);
-    }
-    return {
-      start() {
-        if (rafId !== null) return;
-        lastTs = 0;
-        accMs = 0;
-        inMove = false;
-        window.addEventListener("keydown", onKeyDownCapture, CAPTURE);
-        window.addEventListener("keyup", onKeyUpCapture, CAPTURE);
-        window.addEventListener("blur", onBlur);
-        document.addEventListener("visibilitychange", onVisibility);
-        rafId = requestAnimationFrame(frame);
-      },
-      stop() {
-        if (rafId !== null) {
-          cancelAnimationFrame(rafId);
-          rafId = null;
-        }
-        KEYS.clear();
-        window.removeEventListener("keydown", onKeyDownCapture, CAPTURE);
-        window.removeEventListener("keyup", onKeyUpCapture, CAPTURE);
-        window.removeEventListener("blur", onBlur);
-        document.removeEventListener("visibilitychange", onVisibility);
-      },
-      setSpeed(n) {
-        const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
-        DELAY_MS = v;
-        setGhostDelayMs(v);
-      },
-      getSpeed() {
-        return DELAY_MS;
-      }
-    };
-  }
-  var selectedMap = /* @__PURE__ */ new Map();
-  var seedStockByName = /* @__PURE__ */ new Map();
-  var seedSourceCache = [];
-  var NF_US = new Intl.NumberFormat("en-US");
-  var formatNum = (n) => NF_US.format(Math.max(0, Math.floor(n || 0)));
-  async function clearUiSelectionAtoms() {
-    try {
-      await Atoms.inventory.mySelectedItemName.set(null);
-    } catch {
-    }
-    try {
-      await Atoms.inventory.myValidatedSelectedItemIndex.set(null);
-    } catch {
-    }
-    try {
-      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
-    } catch {
-    }
-  }
-  var OVERLAY_ID = "qws-seeddeleter-overlay";
-  var LIST_ID = "qws-seeddeleter-list";
-  var SUMMARY_ID = "qws-seeddeleter-summary";
-  function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-  }
-  function buildDisplayNameToSpeciesFromCatalog() {
-    const map2 = /* @__PURE__ */ new Map();
-    try {
-      const cat = plantCatalog;
-      for (const species of Object.keys(cat || {})) {
-        const seedName = cat?.[species]?.seed?.name && String(cat?.[species]?.seed?.name) || `${species} Seed`;
-        const arr = map2.get(seedName) ?? [];
-        arr.push(species);
-        map2.set(seedName, arr);
-      }
-    } catch {
-    }
-    return map2;
-  }
-  async function buildSpeciesStockFromInventory() {
-    const inv = await getMySeedInventory();
-    const stock = /* @__PURE__ */ new Map();
-    for (const it of inv) {
-      const q = Math.max(0, Math.floor(it.quantity || 0));
-      if (q > 0) stock.set(it.species, (stock.get(it.species) ?? 0) + q);
-    }
-    return stock;
-  }
-  function allocateForRequestedName(requested, nameToSpecies, speciesStock) {
-    let remaining = Math.max(0, Math.floor(requested.qty || 0));
-    let candidates = nameToSpecies.get(requested.name) ?? [];
-    if (!candidates.length && / seed$/i.test(requested.name)) {
-      const fallbackSpecies = requested.name.replace(/\s+seed$/i, "");
-      if (plantCatalog?.[fallbackSpecies]) candidates = [fallbackSpecies];
-    }
-    if (!candidates.length || remaining <= 0) return [];
-    const ranked = candidates.map((sp) => ({ sp, available: speciesStock.get(sp) ?? 0 })).filter((x) => x.available > 0).sort((a, b) => b.available - a.available);
-    const out = [];
-    for (const { sp, available } of ranked) {
-      if (remaining <= 0) break;
-      const take = Math.min(available, remaining);
-      if (take > 0) {
-        out.push({ species: sp, qty: take });
-        remaining -= take;
-      }
-    }
-    return out;
-  }
-  var _seedDeleteAbort = null;
-  var _seedDeleteBusy = false;
-  async function deleteSelectedSeeds(opts = {}) {
-    if (_seedDeleteBusy) {
-      await toastSimple("Seed deleter", "Deletion already in progress.", "info");
-      return;
-    }
-    const batchSize = Math.max(1, Math.floor(opts.batchSize ?? 25));
-    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 16));
-    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedMap.values())).map((s) => ({ name: s.name, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
-    if (selection.length === 0) {
-      await toastSimple("Seed deleter", "No seeds selected.", "info");
-      return;
-    }
-    const nameToSpecies = buildDisplayNameToSpeciesFromCatalog();
-    const speciesStock = await buildSpeciesStockFromInventory();
-    const allocatedBySpecies = /* @__PURE__ */ new Map();
-    let requestedTotal = 0, cappedTotal = 0;
-    for (const req of selection) {
-      requestedTotal += req.qty;
-      const chunks = allocateForRequestedName(req, nameToSpecies, speciesStock);
-      const okForThis = chunks.reduce((a, c) => a + c.qty, 0);
-      cappedTotal += okForThis;
-      for (const c of chunks) {
-        allocatedBySpecies.set(c.species, (allocatedBySpecies.get(c.species) ?? 0) + c.qty);
-      }
-    }
-    if (cappedTotal <= 0) {
-      await toastSimple("Seed deleter", "Nothing to delete (not in inventory).", "info");
-      return;
-    }
-    if (cappedTotal < requestedTotal) {
-      await toastSimple(
-        "Seed deleter",
-        `Requested ${formatNum(requestedTotal)} but only ${formatNum(cappedTotal)} available. Proceeding.`,
-        "info"
-      );
-    }
-    const tasks = Array.from(allocatedBySpecies.entries()).map(([species, qty]) => ({ species, qty: Math.max(0, Math.floor(qty || 0)) })).filter((t) => t.qty > 0);
-    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
-    if (total <= 0) {
-      await toastSimple("Seed deleter", "Nothing to delete.", "info");
-      return;
-    }
-    _seedDeleteBusy = true;
-    const abort = new AbortController();
-    _seedDeleteAbort = abort;
-    try {
-      await toastSimple("Seed deleter", `Deleting ${formatNum(total)} seeds across ${tasks.length} species...`, "info");
-      let done = 0;
-      for (const t of tasks) {
-        let remaining = t.qty;
-        while (remaining > 0) {
-          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
-          const n = Math.min(batchSize, remaining);
-          for (let i = 0; i < n; i++) {
-            try {
-              await PlayerService.wish(t.species);
-            } catch (err) {
-            }
-          }
-          done += n;
-          remaining -= n;
-          try {
-            opts.onProgress?.({ done, total, species: t.species, remainingForSpecies: remaining });
-            window.dispatchEvent(new CustomEvent("qws:seeddeleter:progress", {
-              detail: { done, total, species: t.species, remainingForSpecies: remaining }
-            }));
-          } catch {
-          }
-          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
-        }
-      }
-      if (!opts.keepSelection) selectedMap.clear();
-      try {
-        window.dispatchEvent(new CustomEvent("qws:seeddeleter:done", { detail: { total, speciesCount: tasks.length } }));
-      } catch {
-      }
-      await toastSimple("Seed deleter", `Deleted ${formatNum(total)} seeds (${tasks.length} species).`, "success");
-    } catch (e) {
-      const msg = e?.message || "Deletion failed.";
-      try {
-        window.dispatchEvent(new CustomEvent("qws:seeddeleter:error", { detail: { message: msg } }));
-      } catch {
-      }
-      await toastSimple("Seed deleter", msg, "error");
-    } finally {
-      _seedDeleteBusy = false;
-      _seedDeleteAbort = null;
-    }
-  }
-  function cancelSeedDeletion() {
-    try {
-      _seedDeleteAbort?.abort();
-    } catch (err) {
-    }
-  }
-  function isSeedDeletionRunning() {
-    return _seedDeleteBusy;
-  }
-  try {
-    window.addEventListener("qws:seeddeleter:apply", async (e) => {
-      try {
-        const selection = Array.isArray(e?.detail?.selection) ? e.detail.selection : void 0;
-        await deleteSelectedSeeds({ selection, batchSize: 25, delayMs: 16, keepSelection: false });
-      } catch {
-      }
-    });
-  } catch {
-  }
-  function seedDisplayNameFromSpecies(species) {
-    try {
-      const node = plantCatalog?.[species];
-      const n = node?.seed?.name;
-      if (typeof n === "string" && n) return n;
-    } catch {
-    }
-    return `${species} Seed`;
-  }
-  function normalizeSeedItem(x, _idx) {
-    if (!x || typeof x !== "object") return null;
-    const species = typeof x.species === "string" ? x.species.trim() : "";
-    const itemType = x.itemType === "Seed" ? "Seed" : null;
-    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
-    if (!species || itemType !== "Seed" || quantity <= 0) return null;
-    return { species, itemType: "Seed", quantity, id: `seed:${species}` };
-  }
-  async function getMySeedInventory() {
-    try {
-      const raw = await Atoms.inventory.mySeedInventory.get();
-      if (!Array.isArray(raw)) return [];
-      const out = [];
-      raw.forEach((x, i) => {
-        const s = normalizeSeedItem(x, i);
-        if (s) out.push(s);
-      });
-      return out;
-    } catch {
-      return [];
-    }
-  }
-  function buildInventoryShapeFrom(items) {
-    return { items, favoritedItemIds: [] };
-  }
-  function setStyles(el2, styles) {
-    Object.assign(el2.style, styles);
-  }
-  function styleOverlayBox(div) {
-    div.id = OVERLAY_ID;
-    setStyles(div, {
-      position: "fixed",
-      left: "12px",
-      top: "12px",
-      zIndex: "999999",
-      display: "grid",
-      gridTemplateRows: "auto auto 1px 1fr auto",
-      gap: "6px",
-      minWidth: "320px",
-      maxWidth: "420px",
-      maxHeight: "52vh",
-      padding: "8px",
-      border: "1px solid #39424c",
-      borderRadius: "10px",
-      background: "rgba(22,27,34,0.92)",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-      backdropFilter: "blur(2px)",
-      userSelect: "none",
-      fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial",
-      fontSize: "12px",
-      lineHeight: "1.25"
-    });
-    div.dataset["qwsSeedDeleter"] = "1";
-  }
-  function makeDraggable(root, handle) {
-    let dragging = false;
-    let ox = 0, oy = 0;
-    const onDown = (e) => {
-      dragging = true;
-      const r = root.getBoundingClientRect();
-      ox = e.clientX - r.left;
-      oy = e.clientY - r.top;
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp, { once: true });
-    };
-    const onMove = (e) => {
-      if (!dragging) return;
-      const nx = Math.max(4, e.clientX - ox);
-      const ny = Math.max(4, e.clientY - oy);
-      root.style.left = `${nx}px`;
-      root.style.top = `${ny}px`;
-    };
-    const onUp = () => {
-      dragging = false;
-      document.removeEventListener("mousemove", onMove);
-    };
-    handle.addEventListener("mousedown", onDown);
-  }
-  function createButton2(label2, styleOverride) {
-    const b = document.createElement("button");
-    b.textContent = label2;
-    setStyles(b, {
-      padding: "4px 8px",
-      borderRadius: "8px",
-      border: "1px solid #4446",
-      background: "#161b22",
-      color: "#E7EEF7",
-      cursor: "pointer",
-      fontWeight: "600",
-      fontSize: "12px",
-      ...styleOverride
-    });
-    b.onmouseenter = () => b.style.borderColor = "#6aa1";
-    b.onmouseleave = () => b.style.borderColor = "#4446";
-    return b;
-  }
-  var overlayKeyGuardsOn = false;
-  function isInsideOverlay(el2) {
-    return !!(el2 && el2.closest?.(`#${OVERLAY_ID}`));
-  }
-  function keyGuardCapture(e) {
-    const ae = document.activeElement;
-    if (!isInsideOverlay(ae)) return;
-    const tag = (ae?.tagName || "").toLowerCase();
-    const isEditable = tag === "input" || tag === "textarea" || ae && ae.isContentEditable;
-    if (!isEditable) return;
-    if (/^[0-9]$/.test(e.key)) {
-      e.stopImmediatePropagation();
-    }
-  }
-  function installOverlayKeyGuards() {
-    if (overlayKeyGuardsOn) return;
-    window.addEventListener("keydown", keyGuardCapture, { capture: true });
-    overlayKeyGuardsOn = true;
-  }
-  function removeOverlayKeyGuards() {
-    if (!overlayKeyGuardsOn) return;
-    window.removeEventListener("keydown", keyGuardCapture, { capture: true });
-    overlayKeyGuardsOn = false;
-  }
-  async function closeSeedInventoryPanel() {
-    try {
-      await fakeInventoryHide();
-    } catch {
-      try {
-        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-      } catch {
-      }
-    }
-  }
-  function createSeedOverlay() {
-    const box = document.createElement("div");
-    styleOverlayBox(box);
-    const header = document.createElement("div");
-    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
-    const title = document.createElement("div");
-    title.textContent = "\u{1F3AF} Selection mode";
-    setStyles(title, { fontWeight: "700", fontSize: "13px" });
-    const hint = document.createElement("div");
-    hint.textContent = "Click seeds in inventory to toggle selection.";
-    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
-    const hr = document.createElement("div");
-    setStyles(hr, { height: "1px", background: "#2d333b" });
-    const list = document.createElement("div");
-    list.id = LIST_ID;
-    setStyles(list, {
-      minHeight: "44px",
-      maxHeight: "26vh",
-      overflow: "auto",
-      padding: "4px",
-      border: "1px dashed #39424c",
-      borderRadius: "8px",
-      background: "rgba(15,19,24,0.84)",
-      userSelect: "text"
-    });
-    const actions = document.createElement("div");
-    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
-    const summary = document.createElement("div");
-    summary.id = SUMMARY_ID;
-    setStyles(summary, { fontWeight: "600" });
-    summary.textContent = "Selected: 0 species \xB7 0 seeds";
-    const btnClear = createButton2("Clear");
-    btnClear.title = "Clear selection";
-    btnClear.onclick = async () => {
-      selectedMap.clear();
-      refreshList();
-      updateSummary();
-      await clearUiSelectionAtoms();
-      await repatchFakeSeedInventoryWithSelection();
-    };
-    _btnConfirm = createButton2("Confirm", { background: "#1F2328CC" });
-    _btnConfirm.disabled = true;
-    _btnConfirm.onclick = async () => {
-      await closeSeedInventoryPanel();
-    };
-    header.append(title);
-    actions.append(summary, btnClear, _btnConfirm);
-    box.append(header, hint, hr, list, actions);
-    makeDraggable(box, header);
-    return box;
-  }
-  function showSeedOverlay() {
-    if (document.getElementById(OVERLAY_ID)) return;
-    const el2 = createSeedOverlay();
-    document.body.appendChild(el2);
-    installOverlayKeyGuards();
-    refreshList();
-    updateSummary();
-  }
-  function hideSeedOverlay() {
-    const el2 = document.getElementById(OVERLAY_ID);
-    if (el2) el2.remove();
-    removeOverlayKeyGuards();
-  }
-  var _btnConfirm = null;
-  var unsubSelectedName = null;
-  function renderListRow(item) {
-    const row = document.createElement("div");
-    setStyles(row, {
-      display: "grid",
-      gridTemplateColumns: "1fr auto",
-      alignItems: "center",
-      gap: "6px",
-      padding: "4px 6px",
-      borderBottom: "1px dashed #2d333b"
-    });
-    const name = document.createElement("div");
-    name.textContent = item.name;
-    setStyles(name, {
-      fontSize: "12px",
-      fontWeight: "600",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    });
-    const controls = document.createElement("div");
-    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
-    const qty = document.createElement("input");
-    qty.type = "number";
-    qty.min = "1";
-    qty.max = String(Math.max(1, item.maxQty));
-    qty.step = "1";
-    qty.value = String(item.qty);
-    qty.className = "qmm-input";
-    setStyles(qty, {
-      width: "68px",
-      height: "28px",
-      border: "1px solid #4446",
-      borderRadius: "8px",
-      background: "rgba(15,19,24,0.90)",
-      padding: "0 8px",
-      fontSize: "12px"
-    });
-    const swallowDigits = (e) => {
-      if (/^[0-9]$/.test(e.key)) {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    };
-    qty.addEventListener("keydown", swallowDigits);
-    qty.onchange = () => {
-      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
-      qty.value = String(v);
-      const cur = selectedMap.get(item.name);
-      if (!cur) return;
-      cur.qty = v;
-      selectedMap.set(item.name, cur);
-      updateSummary();
-    };
-    qty.oninput = qty.onchange;
-    const remove = createButton2("Remove", { background: "transparent" });
-    remove.onclick = async () => {
-      selectedMap.delete(item.name);
-      refreshList();
-      updateSummary();
-      await repatchFakeSeedInventoryWithSelection();
-    };
-    controls.append(qty, remove);
-    row.append(name, controls);
-    return row;
-  }
-  function refreshList() {
-    const list = document.getElementById(LIST_ID);
-    if (!list) return;
-    list.innerHTML = "";
-    const entries = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-    if (entries.length === 0) {
-      const empty = document.createElement("div");
-      empty.textContent = "No seeds selected.";
-      empty.style.opacity = "0.8";
-      list.appendChild(empty);
-      return;
-    }
-    for (const it of entries) list.appendChild(renderListRow(it));
-  }
-  function totalSelected() {
-    let species = 0, qty = 0;
-    for (const it of selectedMap.values()) {
-      species += 1;
-      qty += it.qty;
-    }
-    return { species, qty };
-  }
-  function updateSummary() {
-    const { species, qty } = totalSelected();
-    const el2 = document.getElementById(SUMMARY_ID);
-    if (el2) el2.textContent = `Selected: ${species} species \xB7 ${formatNum(qty)} seeds`;
-    if (_btnConfirm) {
-      _btnConfirm.textContent = "Confirm";
-      _btnConfirm.disabled = qty <= 0;
-      _btnConfirm.style.opacity = qty <= 0 ? "0.6" : "1";
-      _btnConfirm.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
-    }
-  }
-  async function repatchFakeSeedInventoryWithSelection() {
-    const selectedNames = new Set(Array.from(selectedMap.keys()));
-    const filtered = (Array.isArray(seedSourceCache) ? seedSourceCache : []).filter((s) => {
-      const disp = seedDisplayNameFromSpecies(s.species);
-      return !selectedNames.has(disp);
-    });
-    try {
-      await fakeInventoryShow({ items: filtered, favoritedItemIds: [] }, { open: false });
-    } catch {
-    }
-  }
-  async function beginSelectedNameListener() {
-    if (unsubSelectedName) return;
-    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
-      const n = (name || "").trim();
-      if (!n) return;
-      if (selectedMap.has(n)) {
-        selectedMap.delete(n);
-      } else {
-        const max = Math.max(1, seedStockByName.get(n) ?? 1);
-        selectedMap.set(n, { name: n, qty: max, maxQty: max });
-      }
-      refreshList();
-      updateSummary();
-      await clearUiSelectionAtoms();
-      await repatchFakeSeedInventoryWithSelection();
-    });
-    unsubSelectedName = typeof unsub === "function" ? unsub : null;
-  }
-  async function endSelectedNameListener() {
-    const fn = unsubSelectedName;
-    unsubSelectedName = null;
-    try {
-      await fn?.();
-    } catch {
-    }
-  }
-  async function openSeedInventoryPreview() {
-    try {
-      const src = await getMySeedInventory();
-      if (!src.length) {
-        await toastSimple("Seed inventory", "No seeds to display.", "info");
-        return;
-      }
-      await fakeInventoryShow(buildInventoryShapeFrom(src), { open: true });
-    } catch (e) {
-      await toastSimple("Seed inventory", e?.message || "Failed to open seed inventory.", "error");
-    }
-  }
-  async function openSeedSelectorFlow(setWindowVisible) {
-    try {
-      setWindowVisible?.(false);
-      seedSourceCache = await getMySeedInventory();
-      seedStockByName = /* @__PURE__ */ new Map();
-      for (const s of seedSourceCache) {
-        const display = seedDisplayNameFromSpecies(s.species);
-        seedStockByName.set(display, Math.max(1, Math.floor(s.quantity || 0)));
-      }
-      selectedMap.clear();
-      showSeedOverlay();
-      await beginSelectedNameListener();
-      await fakeInventoryShow(buildInventoryShapeFrom(seedSourceCache), { open: true });
-      if (await isInventoryPanelOpen()) {
-        await waitInventoryPanelClosed();
-      }
-    } catch (e) {
-      await toastSimple("Seed inventory", e?.message || "Failed to open seed selector.", "error");
-    } finally {
-      await endSelectedNameListener();
-      hideSeedOverlay();
-      seedSourceCache = [];
-      seedStockByName.clear();
-      setWindowVisible?.(true);
-    }
-  }
-  var MiscService = {
-    // ghost
-    readGhostEnabled,
-    writeGhostEnabled,
-    getGhostDelayMs,
-    setGhostDelayMs,
-    createGhostController,
-    // seeds
-    getMySeedInventory,
-    openSeedInventoryPreview,
-    openSeedSelectorFlow,
-    //delete
-    deleteSelectedSeeds,
-    cancelSeedDeletion,
-    isSeedDeletionRunning,
-    getCurrentSeedSelection() {
-      return Array.from(selectedMap.values());
-    },
-    clearSeedSelection() {
-      selectedMap.clear();
-    }
-  };
-
   // src/ui/menus/misc.ts
   var NF_US2 = new Intl.NumberFormat("en-US");
   var formatNum2 = (n) => NF_US2.format(Math.max(0, Math.floor(n || 0)));
@@ -35178,7 +35408,32 @@ next: ${next}`;
     content.style.display = "grid";
     content.style.gap = "8px";
     content.style.justifyItems = "center";
-    content.append(secPlayer, secSeed);
+    const secSelling = (() => {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "12px";
+      row.style.flexWrap = "wrap";
+      const blockSwitch = ui.switch(MiscService.readBlockSellCrops(false));
+      const label2 = ui.label("Block crop sale (Sell All)");
+      label2.style.fontSize = "13px";
+      label2.style.margin = "0";
+      const pair = document.createElement("div");
+      pair.style.display = "inline-flex";
+      pair.style.alignItems = "center";
+      pair.style.gap = "6px";
+      pair.append(label2, blockSwitch);
+      row.append(pair);
+      blockSwitch.onchange = () => {
+        const on = !!blockSwitch.checked;
+        MiscService.writeBlockSellCrops(on);
+      };
+      const card = ui.card("\u{1F4B8} Selling controls", { tone: "muted", align: "center" });
+      card.root.style.maxWidth = "440px";
+      card.body.append(row);
+      return card.root;
+    })();
+    content.append(secPlayer, secSeed, secSelling);
     view.appendChild(content);
     view.__cleanup__ = () => {
       try {
@@ -35538,7 +35793,7 @@ next: ${next}`;
   }
 
   // src/utils/publicRooms.ts
-  var ROOMS_JSON_URL = "https://raw.githubusercontent.com/Ariedam64/MagicGarden-modMenu/refs/heads/main/rooms.json";
+  var ROOMS_JSON_URL = "https://raw.githubusercontent.com/xVCantCode/MagicGarden-modMenu/refs/heads/main/rooms.json";
   function resolveGmXhr() {
     if (typeof GM_xmlhttpRequest === "function") {
       return GM_xmlhttpRequest;
