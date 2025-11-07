@@ -1,6 +1,6 @@
 import { isDiscordSurface } from "./api";
 
-const REPO_OWNER = "Ariedam64";
+const REPO_OWNER = "xVCantCode";
 const REPO_NAME = "MagicGarden-modMenu";
 const REPO_BRANCH = "main";
 const SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";

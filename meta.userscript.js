@@ -14,6 +14,6 @@
 // @grant        GM_registerMenuCommand
 // @connect      raw.githubusercontent.com
 // @connect      api.github.com
-// @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
-// @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
+// @downloadURL  https://github.com/xVCantCode/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
+// @updateURL    https://github.com/xVCantCode/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
