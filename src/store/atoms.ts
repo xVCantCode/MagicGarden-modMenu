@@ -134,6 +134,7 @@ export const myCurrentGrowSlotIndex = makeAtom<number | null>("myCurrentGrowSlot
 export const myOwnCurrentGardenObject = makeAtom<any>("myOwnCurrentGardenObjectAtom")
 export const isCurrentGrowSlotMature = makeAtom<any>("isCurrentGrowSlotMatureAtom")
 export const myOwnCurrentDirtTileIndex = makeAtom<any>("myOwnCurrentDirtTileIndexAtom")
+export const myCurrentGardenTile = makeAtom<any>("myCurrentGardenTileAtom");
 
 export const weather = makeAtom<string | null>("weatherAtom")
 
@@ -319,6 +320,7 @@ export const Atoms = {
     isCurrentGrowSlotMature,
     myOwnCurrentGardenObjectType,
     myOwnCurrentDirtTileIndex,
+    myCurrentGardenTile,
     myCurrentGrowSlotIndex
   },
   root: { state, map },

@@ -19,6 +19,7 @@ export type KeybindId =
   | "game.move-down"
   | "game.move-left"
   | "game.move-right"
+  | "game.remove-slot-75"
   | `pets.team.${string}`
   | "pets.team.next"
   | "pets.team.prev";
@@ -170,6 +171,12 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
         id: "game.move-right",
         label: "➡ Move right",
         defaultHotkey: { code: "KeyD" },
+      },
+      {
+        id: "game.remove-slot-75",
+        label: "🗑 Remove current garden tile",
+        hint: "Sends RemoveGardenObject using tileType/localTileIndex from atom",
+        defaultHotkey: { ctrl: true, code: "Numpad8" },
       },
     ],
   },

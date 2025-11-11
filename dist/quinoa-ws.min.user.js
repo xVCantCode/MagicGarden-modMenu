@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Belial's Mod
 // @namespace    Quinoa
-// @version      2.6.0
+// @version      2.6.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2934,6 +2934,7 @@
   var myOwnCurrentGardenObject = makeAtom("myOwnCurrentGardenObjectAtom");
   var isCurrentGrowSlotMature = makeAtom("isCurrentGrowSlotMatureAtom");
   var myOwnCurrentDirtTileIndex = makeAtom("myOwnCurrentDirtTileIndexAtom");
+  var myCurrentGardenTile = makeAtom("myCurrentGardenTileAtom");
   var weather = makeAtom("weatherAtom");
   var activeModal = makeAtom("activeModalAtom");
   var avatarTriggerAnimationAtom = makeAtom("avatarTriggerAnimationAtom");
@@ -3017,6 +3018,7 @@
       isCurrentGrowSlotMature,
       myOwnCurrentGardenObjectType,
       myOwnCurrentDirtTileIndex,
+      myCurrentGardenTile,
       myCurrentGrowSlotIndex
     },
     root: { state, map },
@@ -11251,6 +11253,12 @@
           id: "game.move-right",
           label: "\u27A1 Move right",
           defaultHotkey: { code: "KeyD" }
+        },
+        {
+          id: "game.remove-slot-75",
+          label: "\u{1F5D1} Remove current garden tile",
+          hint: "Sends RemoveGardenObject using tileType/localTileIndex from atom",
+          defaultHotkey: { ctrl: true, code: "Numpad8" }
         }
       ]
     },
@@ -23159,6 +23167,45 @@ try{importScripts("${abs}")}catch(e){}
     };
   }
 
+  // src/services/removeGardenObject.ts
+  var installed = false;
+  function installRemoveGardenObjectHotkeysOnce() {
+    if (installed || typeof window === "undefined") return;
+    installed = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        try {
+          if (shouldIgnoreKeydown(event)) return;
+        } catch {
+        }
+        if (!eventMatchesKeybind("game.remove-slot-75", event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        (async () => {
+          try {
+            const cur = await Atoms.garden.myCurrentGardenTile.get();
+            const tt = String(cur?.tileType ?? "");
+            const li = Number(cur?.localTileIndex);
+            if (tt !== "Dirt" && tt !== "Boardwalk") {
+              console.warn("[Belial's Mod] RemoveGardenObject: current tile type invalid", cur);
+              return;
+            }
+            if (!Number.isFinite(li)) {
+              console.warn("[Belial's Mod] RemoveGardenObject: localTileIndex invalid", cur);
+              return;
+            }
+            console.info("[Belial's Mod] RemoveGardenObject: sending", { slotType: tt, slot: li });
+            sendToGame({ type: "RemoveGardenObject", slot: li, slotType: tt });
+          } catch (err) {
+            console.error("[Belial's Mod] RemoveGardenObject: error", err);
+          }
+        })();
+      },
+      true
+    );
+  }
+
   // src/ui/hud.ts
   function mountHUD(opts) {
     const LS_POS = "qws:pos";
@@ -24018,6 +24065,7 @@ try{importScripts("${abs}")}catch(e){}
     installShopKeybindsOnce();
     installSellKeybindsOnce();
     installGameKeybindsOnce();
+    installRemoveGardenObjectHotkeysOnce();
     (async () => {
       try {
         setTeamsForHotkeys(PetsService.getTeams());

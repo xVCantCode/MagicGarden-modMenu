@@ -22,6 +22,7 @@ import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
 import { startSelectedInventoryQuantityLogger } from "../utils/inventorySelectionLogger";
 import { startModalObserver } from "../utils/checkModal";
 import { startInventorySortingObserver } from "../utils/inventorySorting";
+import { installRemoveGardenObjectHotkeysOnce } from "../services/removeGardenObject";
 
 // ========================
 // Types d’intégration
@@ -1000,6 +1001,7 @@ export function initWatchers(){
     installShopKeybindsOnce();
     installSellKeybindsOnce();
     installGameKeybindsOnce();
+    installRemoveGardenObjectHotkeysOnce();
     (async () => {
         try { setTeamsForHotkeys(PetsService.getTeams()); } catch {}
         try {
